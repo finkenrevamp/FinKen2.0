@@ -1,0 +1,35 @@
+{
+  "name": "finken-2.0",
+  "version": "2.0.0",
+  "description": "FinKen 2.0 - Financial Management System",
+  "scripts": {
+    "dev": "./dev.sh dev",
+    "setup": "./dev.sh setup",
+    "backend": "./dev.sh backend",
+    "frontend": "./dev.sh frontend",
+    "test": "./dev.sh test",
+    "clean": "./dev.sh clean",
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && pip install -r requirements.txt",
+    "build:frontend": "cd frontend && npm run build",
+    "start:backend": "cd backend && python main.py",
+    "start:frontend": "cd frontend && npm run dev"
+  },
+  "keywords": [
+    "financial",
+    "accounting",
+    "management",
+    "fastapi",
+    "react",
+    "supabase"
+  ],
+  "author": "FinKen Development Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.9.0"
+  },
+  "workspaces": [
+    "frontend"
+  ]
+}

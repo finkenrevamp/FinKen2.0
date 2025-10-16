@@ -23,6 +23,8 @@ class Profile(BaseModelConfig, TimestampMixin):
     username: str = Field(..., alias="Username", max_length=255)
     first_name: str = Field(..., alias="FirstName", max_length=255)
     last_name: str = Field(..., alias="LastName", max_length=255)
+    dob: Optional[datetime] = Field(None, alias="DOB", description="Date of Birth")
+    address: Optional[str] = Field(None, alias="Address", max_length=500)
     profile_picture_url: Optional[str] = Field(None, alias="ProfilePictureURL")
     role_id: int = Field(..., alias="RoleID")
     is_active: bool = Field(True, alias="IsActive")
@@ -36,6 +38,8 @@ class ProfileCreate(BaseModel):
     username: str = Field(..., max_length=255)
     first_name: str = Field(..., max_length=255)
     last_name: str = Field(..., max_length=255)
+    dob: Optional[datetime] = None
+    address: Optional[str] = Field(None, max_length=500)
     profile_picture_url: Optional[str] = None
     role_id: int = Field(...)
 
@@ -44,6 +48,8 @@ class ProfileUpdate(BaseModel):
     username: Optional[str] = Field(None, max_length=255)
     first_name: Optional[str] = Field(None, max_length=255)
     last_name: Optional[str] = Field(None, max_length=255)
+    dob: Optional[datetime] = None
+    address: Optional[str] = Field(None, max_length=500)
     profile_picture_url: Optional[str] = None
     role_id: Optional[int] = None
     is_active: Optional[bool] = None
@@ -53,6 +59,8 @@ class RegistrationRequest(BaseModelConfig):
     request_id: Optional[int] = Field(None, alias="RequestID")
     first_name: str = Field(..., alias="FirstName", max_length=255)
     last_name: str = Field(..., alias="LastName", max_length=255)
+    dob: Optional[datetime] = Field(None, alias="DOB", description="Date of Birth")
+    address: Optional[str] = Field(None, alias="Address", max_length=500)
     email: EmailStr = Field(..., alias="Email")
     request_date: datetime = Field(default_factory=datetime.utcnow, alias="RequestDate")
     status: str = Field(default="Pending", alias="Status")
@@ -63,6 +71,8 @@ class RegistrationRequestCreate(BaseModel):
     """Registration request creation model"""
     first_name: str = Field(..., max_length=255)
     last_name: str = Field(..., max_length=255)
+    dob: Optional[datetime] = None
+    address: Optional[str] = Field(None, max_length=500)
     email: EmailStr = Field(...)
 
 class RegistrationRequestUpdate(BaseModel):

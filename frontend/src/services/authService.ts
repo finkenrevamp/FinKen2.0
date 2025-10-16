@@ -22,6 +22,8 @@ interface BackendProfile {
   Username: string;
   FirstName: string;
   LastName: string;
+  DOB?: string;
+  Address?: string;
   ProfilePictureURL?: string;
   RoleID: number;
   IsActive: boolean;
@@ -87,6 +89,8 @@ const transformBackendProfileToUser = (profile: BackendProfile): User => {
     username: profile.Username,
     firstName: profile.FirstName,
     lastName: profile.LastName,
+    dateOfBirth: profile.DOB,
+    address: profile.Address,
     email: '', // Email is not included in the profile response, would need separate call
     role: mappedRole,
     profileImage: profile.ProfilePictureURL,
@@ -162,9 +166,9 @@ class AuthService {
       const registrationRequest = {
         first_name: request.firstName,
         last_name: request.lastName,
+        dob: request.dateOfBirth,
+        address: request.address,
         email: request.email,
-        // Note: The backend doesn't include dateOfBirth and address in the registration request
-        // These fields might be handled differently or stored elsewhere
       };
 
       const response = await apiClient.post<RegistrationRequestResponse>(

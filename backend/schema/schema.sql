@@ -98,6 +98,7 @@ CREATE TABLE public.profiles (
   RoleID bigint NOT NULL,
   IsActive boolean NOT NULL DEFAULT true,
   DateCreated timestamp with time zone NOT NULL DEFAULT now(),
+  DOB date,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
   CONSTRAINT profiles_RoleID_fkey FOREIGN KEY (RoleID) REFERENCES public.roles(RoleID)
@@ -111,6 +112,8 @@ CREATE TABLE public.registrationrequests (
   Status text NOT NULL DEFAULT 'Pending'::text,
   ReviewedByUserID uuid,
   ReviewDate timestamp with time zone,
+  DOB date,
+  Address text,
   CONSTRAINT registrationrequests_pkey PRIMARY KEY (RequestID),
   CONSTRAINT registrationrequests_ReviewedByUserID_fkey FOREIGN KEY (ReviewedByUserID) REFERENCES public.profiles(id)
 );

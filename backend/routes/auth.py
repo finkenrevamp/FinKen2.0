@@ -215,6 +215,8 @@ async def create_registration_request(request: RegistrationRequestCreate):
         insert_data = {
             "FirstName": request.first_name,
             "LastName": request.last_name,
+            "DOB": request.dob.isoformat() if request.dob else None,
+            "Address": request.address,
             "Email": request.email,
             "Status": "Pending"
         }
@@ -334,6 +336,8 @@ async def approve_registration_request(
             "Username": username,
             "FirstName": reg_request.first_name,
             "LastName": reg_request.last_name,
+            "DOB": reg_request.dob.isoformat() if reg_request.dob else None,
+            "Address": reg_request.address,
             "RoleID": approval_data.role_id
         }
         

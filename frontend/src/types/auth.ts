@@ -3,6 +3,8 @@ export interface User {
   username: string;
   firstName: string;
   lastName: string;
+  dateOfBirth?: string;
+  address?: string;
   email: string;
   role: 'Administrator' | 'Manager' | 'Accountant';
   profileImage?: string;

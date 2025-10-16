@@ -70,9 +70,7 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
         user_id = user_response.user.id
         
         # Get user profile from database
-        profile_response = supabase.from_("profiles").select(
-            "*, roles(RoleID, RoleName)"
-        ).eq("id", user_id).single().execute()
+        profile_response = supabase.from_("profiles").select("*").eq("id", user_id).single().execute()
         
         if not profile_response.data:
             raise HTTPException(
@@ -80,10 +78,19 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
                 detail="User profile not found"
             )
         
+        profile_data = profile_response.data
+        
+        # Fetch the role information separately
+        role_id = profile_data.get("RoleID")
+        if role_id:
+            role_response = supabase.from_("roles").select("*").eq("RoleID", role_id).single().execute()
+            if role_response.data:
+                profile_data["role"] = role_response.data
+        
         # Set current user context for audit logging
         set_current_user(user_id)
         
-        return Profile(**profile_response.data)
+        return Profile(**profile_data)
         
     except Exception as e:
         logger.error(f"Token validation error: {e}")
@@ -142,9 +149,7 @@ async def sign_in(user_login: UserLogin):
         user_id = auth_response.user.id
         
         # Check if user profile exists and is active
-        profile_response = supabase.from_("profiles").select(
-            "*, roles(RoleID, RoleName)"
-        ).eq("id", user_id).single().execute()
+        profile_response = supabase.from_("profiles").select("*").eq("id", user_id).single().execute()
         
         if not profile_response.data:
             raise HTTPException(
@@ -152,7 +157,16 @@ async def sign_in(user_login: UserLogin):
                 detail="User profile not found. Please contact administrator."
             )
         
-        profile = Profile(**profile_response.data)
+        profile_data = profile_response.data
+        
+        # Fetch the role information separately
+        role_id = profile_data.get("RoleID")
+        if role_id:
+            role_response = supabase.from_("roles").select("*").eq("RoleID", role_id).single().execute()
+            if role_response.data:
+                profile_data["role"] = role_response.data
+        
+        profile = Profile(**profile_data)
         
         if not profile.is_active:
             raise HTTPException(

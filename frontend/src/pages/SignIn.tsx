@@ -18,36 +18,19 @@ import {
   Person,
   Lock,
 } from '@mui/icons-material';
-import type { LoginCredentials, User } from '../types/auth';
+import type { LoginCredentials } from '../types/auth';
+import { useAuth } from '../contexts/AuthContext';
 import AuthHeader from '../components/AuthHeader';
 
-interface SignInProps {
-  onLogin?: (user: User) => void;
-}
-
-// Mock user for testing
-const mockUser: User = {
-  id: '1',
-  username: 'admin',
-  firstName: 'John',
-  lastName: 'Administrator',
-  email: 'admin@finken.com',
-  role: 'administrator',
-  profileImage: '',
-  isActive: true,
-  createdAt: '2024-01-01T00:00:00Z',
-  lastLogin: new Date().toISOString(),
-};
-
-const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
+const SignIn: React.FC = () => {
   const navigate = useNavigate();
+  const { signIn, isLoading, error } = useAuth();
   const [credentials, setCredentials] = useState<LoginCredentials>({
     username: '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -56,47 +39,43 @@ const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
       [name]: value,
     }));
     // Clear error when user starts typing
-    if (error) setError(null);
+    if (localError) setLocalError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setIsLoading(true);
+    setLocalError(null);
 
     // Basic validation
     if (!credentials.username || !credentials.password) {
-      setError('Please enter both username and password.');
-      setIsLoading(false);
+      setLocalError('Please enter both email and password.');
+      return;
+    }
+
+    // Basic email validation (since backend expects email)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(credentials.username)) {
+      setLocalError('Please enter a valid email address.');
       return;
     }
 
     try {
-      // TODO: Implement actual authentication logic
-      console.log('Login attempt:', credentials);
-      
-      // Mock authentication for now
-      if (credentials.username === 'admin' && credentials.password === 'admin123') {
-        // Set last login time
-        const user = { ...mockUser, lastLogin: new Date().toISOString() };
-        
-        if (onLogin) {
-          onLogin(user);
-        }
-        navigate('/home');
-      } else {
-        setError('Invalid username or password. Please try again.');
-      }
+      await signIn(credentials);
+      // On success, navigate to home
+      navigate('/home');
     } catch (err) {
-      setError('An error occurred during login. Please try again.');
-    } finally {
-      setIsLoading(false);
+      // Error is already handled by the auth context
+      // We just need to handle any additional local error logic if needed
+      console.error('Sign-in error:', err);
     }
   };
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
+
+  // Display either local error or context error
+  const displayError = localError || error;
 
   return (
     <>
@@ -201,9 +180,9 @@ const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
               Sign In
             </Typography>
 
-            {error && (
+            {displayError && (
               <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
+                {displayError}
               </Alert>
             )}
 
@@ -213,9 +192,10 @@ const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
                 required
                 fullWidth
                 id="username"
-                label="Username"
+                label="Email Address"
                 name="username"
-                autoComplete="username"
+                type="email"
+                autoComplete="email"
                 autoFocus
                 value={credentials.username}
                 onChange={handleInputChange}
@@ -226,6 +206,7 @@ const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
                     </InputAdornment>
                   ),
                 }}
+                helperText="Enter your email address to sign in"
               />
               <TextField
                 margin="normal"
@@ -277,6 +258,7 @@ const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
                   variant="outlined"
                   fullWidth
                   sx={{ py: 1 }}
+                  disabled={isLoading}
                 >
                   Forgot Password?
                 </Button>
@@ -288,6 +270,7 @@ const SignIn: React.FC<SignInProps> = ({ onLogin }) => {
                   color="secondary"
                   fullWidth
                   sx={{ py: 1 }}
+                  disabled={isLoading}
                 >
                   Create New User
                 </Button>

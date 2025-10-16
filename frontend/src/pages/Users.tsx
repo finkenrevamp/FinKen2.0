@@ -79,7 +79,7 @@ const Users: React.FC<UsersProps> = ({ user, onLogout }) => {
       email: 'bob.wilson@example.com',
       dateOfBirth: '1982-11-08',
       address: '789 Pine St, Chicago, IL 60601',
-      role: 'administrator',
+      role: 'Administrator',
       status: 'suspended',
       dateCreated: '2024-01-20',
     },
@@ -91,7 +91,7 @@ const Users: React.FC<UsersProps> = ({ user, onLogout }) => {
       email: 'alice.brown@example.com',
       dateOfBirth: '1988-04-12',
       address: '321 Elm St, Houston, TX 77001',
-      role: 'accountant',
+      role: 'Accountant',
       status: 'pending',
       dateCreated: '2024-03-01',
     },
@@ -146,11 +146,11 @@ const Users: React.FC<UsersProps> = ({ user, onLogout }) => {
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'administrator':
+      case 'Administrator':
         return 'error';
-      case 'manager':
+      case 'Manager':
         return 'primary';
-      case 'accountant':
+      case 'Accountant':
         return 'secondary';
       default:
         return 'default';

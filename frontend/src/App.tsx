@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Box, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -38,7 +39,31 @@ const theme = createTheme({
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          background: 'linear-gradient(135deg, #001f3f 0%, #003366 25%, #004080 50%, #0066cc 75%, #1a8cff 100%)',
+        }}
+      >
+        <Box sx={{ textAlign: 'center', color: 'white' }}>
+          <Typography variant="h4" gutterBottom>
+            FinKen 2.0
+          </Typography>
+          <Typography variant="body1">
+            Loading...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
+  
   return isAuthenticated && user ? (
     <>{children}</>
   ) : (
@@ -48,7 +73,31 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public Route Component (redirect to home if already authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          background: 'linear-gradient(135deg, #001f3f 0%, #003366 25%, #004080 50%, #0066cc 75%, #1a8cff 100%)',
+        }}
+      >
+        <Box sx={{ textAlign: 'center', color: 'white' }}>
+          <Typography variant="h4" gutterBottom>
+            FinKen 2.0
+          </Typography>
+          <Typography variant="body1">
+            Loading...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
+  
   return !isAuthenticated ? (
     <>{children}</>
   ) : (
@@ -58,7 +107,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 // App Routes Component
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated, user, login, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
 
   return (
     <Routes>
@@ -67,7 +116,7 @@ const AppRoutes: React.FC = () => {
         path="/sign-in"
         element={
           <PublicRoute>
-            <SignIn onLogin={login} />
+            <SignIn />
           </PublicRoute>
         }
       />

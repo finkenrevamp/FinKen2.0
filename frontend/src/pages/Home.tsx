@@ -56,28 +56,28 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
       description: 'Manage your accounting structure',
       icon: <AccountTree color="primary" />,
       path: '/chart-of-accounts',
-      roles: ['administrator', 'manager', 'accountant'],
+      roles: ['Administrator', 'Manager', 'Accountant'],
     },
     {
       title: 'Journal Entries',
       description: 'Create and manage journal entries',
       icon: <Assignment color="primary" />,
       path: '/journal-entries',
-      roles: ['manager', 'accountant'],
+      roles: ['Manager', 'Accountant'],
     },
     {
       title: 'Financial Reports',
       description: 'Generate financial statements',
       icon: <TrendingUp color="primary" />,
       path: '/reports',
-      roles: ['administrator', 'manager'],
+      roles: ['Administrator', 'Manager'],
     },
     {
       title: 'User Management',
       description: 'Manage system users and permissions',
       icon: <People color="primary" />,
       path: '/users',
-      roles: ['administrator'],
+      roles: ['Administrator'],
     },
   ];
 
@@ -110,7 +110,7 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
         </Box>
 
         {/* Quick Access to Registration Requests (Admin/Manager only) */}
-        {(user.role === 'administrator' || user.role === 'manager') && (
+        {(user.role === 'Administrator' || user.role === 'Manager') && (
           <Card 
             elevation={3} 
             sx={{ 
@@ -208,7 +208,7 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
                 </Card>
               )}
 
-              {user.role === 'administrator' && (
+              {user.role === 'Administrator' && (
                 <>
                   <Card elevation={2}>
                     <CardContent>

@@ -45,11 +45,11 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'administrator':
+      case 'Administrator':
         return 'error';
-      case 'manager':
+      case 'Manager':
         return 'warning';
-      case 'accountant':
+      case 'Accountant':
         return 'info';
       default:
         return 'default';
@@ -57,7 +57,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   };
 
   const formatRole = (role: string) => {
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    return role; // Role is already properly capitalized
   };
 
   return (
@@ -104,7 +104,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
         {/* Navigation Menu */}
         <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
-          {user.role === 'administrator' && (
+          {user.role === 'Administrator' && (
             <>
               <Button
                 color="inherit"

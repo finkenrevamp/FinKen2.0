@@ -20,9 +20,11 @@ import {
   CalendarToday,
 } from '@mui/icons-material';
 import type { SignUpRequest } from '../types/auth';
+import { useAuth } from '../contexts/AuthContext';
 import AuthHeader from '../components/AuthHeader';
 
 const SignUp: React.FC = () => {
+  const { createRegistrationRequest } = useAuth();
   const [formData, setFormData] = useState<SignUpRequest>({
     firstName: '',
     lastName: '',
@@ -98,14 +100,8 @@ const SignUp: React.FC = () => {
     }
 
     try {
-      // TODO: Implement actual registration API call
-      console.log('Registration request:', formData);
-      
-      // Mock successful registration
-      setSuccess(
-        'Registration request submitted successfully! ' +
-        'An administrator will review your request and send you an email with login instructions if approved.'
-      );
+      const message = await createRegistrationRequest(formData);
+      setSuccess(message);
       
       // Reset form
       setFormData({
@@ -118,7 +114,8 @@ const SignUp: React.FC = () => {
       setDateOfBirth(null);
       
     } catch (err) {
-      setError('An error occurred during registration. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

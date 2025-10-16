@@ -4,7 +4,7 @@ export interface User {
   firstName: string;
   lastName: string;
   email: string;
-  role: 'administrator' | 'manager' | 'accountant';
+  role: 'Administrator' | 'Manager' | 'Accountant';
   profileImage?: string;
   isActive: boolean;
   createdAt: string;
@@ -12,7 +12,7 @@ export interface User {
 }
 
 export interface LoginCredentials {
-  username: string;
+  username: string; // This will be treated as email in the backend
   password: string;
 }
 
@@ -41,4 +41,13 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+}
+
+export interface AuthContextType extends AuthState {
+  login: (user: User) => void;
+  logout: () => void;
+  signIn: (credentials: LoginCredentials) => Promise<void>;
+  signOut: () => Promise<void>;
+  createRegistrationRequest: (request: SignUpRequest) => Promise<string>;
+  forgotPassword: (request: ForgotPasswordRequest) => Promise<string>;
 }

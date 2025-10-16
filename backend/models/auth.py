@@ -92,3 +92,27 @@ class TokenResponse(BaseModel):
     expires_in: int
     refresh_token: Optional[str] = None
     user: Optional[Profile] = None
+
+class ForgotPasswordRequest(BaseModel):
+    """Forgot password request model"""
+    email: EmailStr
+    username: str = Field(..., max_length=255)
+
+class ResetPasswordRequest(BaseModel):
+    """Reset password request model"""
+    token: str
+    new_password: str = Field(..., min_length=8)
+
+class ChangePasswordRequest(BaseModel):
+    """Change password request model"""
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+class ApproveRegistrationRequest(BaseModel):
+    """Approve registration request model"""
+    role_id: int
+    password: str = Field(..., min_length=8)
+
+class RejectRegistrationRequest(BaseModel):
+    """Reject registration request model"""
+    reason: str = Field(..., max_length=500)

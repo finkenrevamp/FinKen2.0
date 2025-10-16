@@ -11,12 +11,12 @@ import logging
 from datetime import datetime
 import re
 
-from ..models.auth import (
+from models.auth import (
     UserLogin, TokenResponse, RegistrationRequestCreate, RegistrationRequest,
     RegistrationRequestUpdate, UserRegister, Profile, ProfileCreate,
     ApproveRegistrationRequest, RejectRegistrationRequest
 )
-from ..services.supabase import get_supabase_service, get_supabase_client, set_current_user
+from services.supabase import get_supabase_service, get_supabase_client, set_current_user
 
 router = APIRouter()
 security = HTTPBearer()

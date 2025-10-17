@@ -69,6 +69,7 @@ interface BackendRegistrationRequest {
   Status: string;
   ReviewedByUserID?: string;
   ReviewDate?: string;
+  ReviewerUsername?: string;
 }
 
 export interface RegistrationRequestData {
@@ -405,7 +406,7 @@ class AuthService {
           address: req.Address,
           requestDate: req.RequestDate,
           status,
-          reviewedBy: req.ReviewedByUserID,
+          reviewedBy: req.ReviewerUsername, // Use username instead of UUID
           reviewDate: req.ReviewDate,
         };
       });

@@ -147,12 +147,11 @@ const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
 
   const columns: GridColDef[] = useMemo(() => [
     {
-      field: 'user_id',
+      field: 'profile_id',
       headerName: 'User ID',
       width: 100,
       sortable: true,
       filterable: true,
-      valueGetter: (params: any) => params.row?.user_id ? params.row.user_id.substring(0, 8) : '',
     },
     {
       field: 'username',

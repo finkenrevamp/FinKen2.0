@@ -68,6 +68,7 @@ class RegistrationRequest(BaseModelConfig):
     status: str = Field(default="Pending", alias="Status")
     reviewed_by_user_id: Optional[UUID] = Field(None, alias="ReviewedByUserID")
     review_date: Optional[datetime] = Field(None, alias="ReviewDate")
+    reviewer_username: Optional[str] = Field(None, alias="ReviewerUsername")
 
 class RegistrationRequestCreate(BaseModel):
     """Registration request creation model"""

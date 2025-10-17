@@ -326,14 +326,29 @@ async def get_registration_requests(
     try:
         supabase = get_supabase_client()
         
-        query = supabase.from_("registrationrequests").select("*")
+        # Join with profiles table to get reviewer username
+        query = supabase.from_("registrationrequests").select(
+            "*, profiles!registrationrequests_ReviewedByUserID_fkey(Username)"
+        )
         
         if status_filter:
             query = query.eq("Status", status_filter)
         
         result = query.order("RequestDate", desc=True).execute()
         
-        return [RegistrationRequest(**item) for item in result.data]
+        # Transform the data to include reviewer username
+        requests = []
+        for item in result.data:
+            request_data = {**item}
+            # Add reviewer username if available
+            if item.get("profiles") and isinstance(item["profiles"], dict):
+                request_data["ReviewerUsername"] = item["profiles"].get("Username")
+            # Remove the nested profiles object
+            if "profiles" in request_data:
+                del request_data["profiles"]
+            requests.append(RegistrationRequest(**request_data))
+        
+        return requests
         
     except HTTPException:
         raise

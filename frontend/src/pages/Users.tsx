@@ -370,9 +370,16 @@ const Users: React.FC<UsersProps> = ({ user, onLogout }) => {
 
   const columns: GridColDef[] = useMemo(() => [
     {
+      field: 'profile_id',
+      headerName: 'User ID',
+      width: 70,
+      sortable: true,
+      filterable: true,
+    },
+    {
       field: 'username',
       headerName: 'Username',
-      width: 150,
+      width: 120,
       sortable: true,
       filterable: true,
     },
@@ -404,7 +411,7 @@ const Users: React.FC<UsersProps> = ({ user, onLogout }) => {
     {
       field: 'address',
       headerName: 'Address',
-      width: 250,
+      width: 210,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {

@@ -10,6 +10,7 @@ import { apiClient } from './apiClient';
  */
 export interface UserData {
   id: string;
+  profile_id: number;
   username: string;
   first_name: string;
   last_name: string;
@@ -57,6 +58,7 @@ export interface SuspendUserRequest {
  */
 export interface PasswordExpiryData {
   id: string;
+  profile_id: number;
   user_id: string;
   username: string;
   name: string;

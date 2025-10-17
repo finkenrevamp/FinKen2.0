@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 class UserWithEmail(BaseModel):
     """User profile with email from auth.users"""
     id: str
+    profile_id: int
     username: str
     first_name: str
     last_name: str
@@ -61,6 +62,7 @@ class SuspendUserRequest(BaseModel):
 class PasswordExpiryData(BaseModel):
     """Password expiry data for a user"""
     id: str
+    profile_id: int
     user_id: str
     username: str
     name: str
@@ -183,6 +185,7 @@ async def get_all_users(
                 
                 users_with_email.append(UserWithEmail(
                     id=str(profile.get("id")),
+                    profile_id=profile.get("ProfileID", 0),
                     username=profile.get("Username", ""),
                     first_name=profile.get("FirstName", ""),
                     last_name=profile.get("LastName", ""),
@@ -292,6 +295,7 @@ async def get_password_expiry_data(
                 
                 password_expiry_list.append(PasswordExpiryData(
                     id=str(user_id),
+                    profile_id=profile.get("ProfileID", 0),
                     user_id=str(user_id),
                     username=profile.get("Username", ""),
                     name=user_name,
@@ -423,6 +427,7 @@ async def get_user_by_id(
         
         return UserWithEmail(
             id=str(profile.get("id")),
+            profile_id=profile.get("ProfileID", 0),
             username=profile.get("Username", ""),
             first_name=profile.get("FirstName", ""),
             last_name=profile.get("LastName", ""),

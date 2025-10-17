@@ -479,6 +479,21 @@ class AuthService {
       throw new Error('An unexpected error occurred while completing signup');
     }
   }
+
+  /**
+   * Get all available roles (admin only)
+   */
+  async getRoles(): Promise<BackendRole[]> {
+    try {
+      const response = await apiClient.get<BackendRole[]>('/auth/roles');
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while fetching roles');
+    }
+  }
 }
 
 // Export singleton instance

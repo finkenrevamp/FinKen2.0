@@ -86,10 +86,53 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
             if role_response.data:
                 profile_data["role"] = role_response.data
         
+        profile = Profile(**profile_data)
+        
+        # Check if user is deactivated
+        if not profile.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is deactivated. Please contact administrator."
+            )
+        
+        # Check if user is suspended
+        if profile.is_suspended:
+            if profile.suspension_end_date:
+                # Check if suspension has expired
+                from datetime import timezone
+                current_time = datetime.now(timezone.utc)
+                
+                # Make suspension_end_date timezone-aware if it isn't already
+                suspension_end = profile.suspension_end_date
+                if suspension_end.tzinfo is None:
+                    suspension_end = suspension_end.replace(tzinfo=timezone.utc)
+                
+                if current_time < suspension_end:
+                    # Still suspended
+                    suspension_date_str = suspension_end.strftime("%B %d, %Y")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"User account is suspended until {suspension_date_str}. Please contact administrator."
+                    )
+                else:
+                    # Suspension expired, automatically unsuspend the user
+                    supabase.from_("profiles").update({
+                        "isSuspended": False,
+                        "SuspensionEndDate": None
+                    }).eq("id", user_id).execute()
+                    profile.is_suspended = False
+                    profile.suspension_end_date = None
+            else:
+                # Suspended indefinitely
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User account is suspended. Please contact administrator."
+                )
+        
         # Set current user context for audit logging
         set_current_user(user_id)
         
-        return Profile(**profile_data)
+        return profile
         
     except Exception as e:
         logger.error(f"Token validation error: {e}")
@@ -172,6 +215,40 @@ async def sign_in(user_login: UserLogin):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is deactivated. Please contact administrator."
             )
+        
+        # Check if user is suspended
+        if profile.is_suspended:
+            if profile.suspension_end_date:
+                # Check if suspension has expired
+                from datetime import timezone
+                current_time = datetime.now(timezone.utc)
+                
+                # Make suspension_end_date timezone-aware if it isn't already
+                suspension_end = profile.suspension_end_date
+                if suspension_end.tzinfo is None:
+                    suspension_end = suspension_end.replace(tzinfo=timezone.utc)
+                
+                if current_time < suspension_end:
+                    # Still suspended
+                    suspension_date_str = suspension_end.strftime("%B %d, %Y")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"User account is suspended until {suspension_date_str}. Please contact administrator."
+                    )
+                else:
+                    # Suspension expired, automatically unsuspend the user
+                    supabase.from_("profiles").update({
+                        "isSuspended": False,
+                        "SuspensionEndDate": None
+                    }).eq("id", user_id).execute()
+                    profile.is_suspended = False
+                    profile.suspension_end_date = None
+            else:
+                # Suspended indefinitely
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User account is suspended. Please contact administrator."
+                )
         
         # Set current user context
         set_current_user(user_id)

@@ -28,6 +28,8 @@ class Profile(BaseModelConfig, TimestampMixin):
     profile_picture_url: Optional[str] = Field(None, alias="ProfilePictureURL")
     role_id: int = Field(..., alias="RoleID")
     is_active: bool = Field(True, alias="IsActive")
+    is_suspended: bool = Field(False, alias="isSuspended")
+    suspension_end_date: Optional[datetime] = Field(None, alias="SuspensionEndDate")
     date_created: datetime = Field(default_factory=datetime.utcnow, alias="DateCreated")
     
     # Relationships

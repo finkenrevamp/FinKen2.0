@@ -8,7 +8,12 @@ import type {
   LoginCredentials, 
   User, 
   SignUpRequest, 
-  ForgotPasswordRequest 
+  ForgotPasswordRequest,
+  SecurityQuestionResponse,
+  VerifySecurityAnswerRequest,
+  PasswordResetTokenResponse,
+  ResetPasswordRequest,
+  VerifyResetTokenResponse
 } from '../types/auth';
 
 // Backend API types to match the Pydantic models
@@ -249,23 +254,81 @@ class AuthService {
   }
 
   /**
-   * Send forgot password email
+   * Initiate forgot password process - returns security question
    */
-  async forgotPassword(request: ForgotPasswordRequest): Promise<string> {
+  async initiateForgotPassword(request: ForgotPasswordRequest): Promise<SecurityQuestionResponse> {
     try {
-      // The backend expects email as a query parameter
-      const response = await apiClient.post<SimpleMessageResponse>(
-        `/auth/forgot-password?email=${encodeURIComponent(request.email)}`,
-        null,
+      const response = await apiClient.post<SecurityQuestionResponse>(
+        '/auth/forgot-password',
+        request,
         { requiresAuth: false }
       );
 
-      return response.data.message || 'Password reset email sent successfully';
+      return response.data;
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(error.message);
       }
-      throw new Error('An unexpected error occurred while sending password reset email');
+      throw new Error('An unexpected error occurred while initiating password reset');
+    }
+  }
+
+  /**
+   * Verify security answer and get reset token (also sends email)
+   */
+  async verifySecurityAnswer(request: VerifySecurityAnswerRequest): Promise<PasswordResetTokenResponse> {
+    try {
+      const response = await apiClient.post<PasswordResetTokenResponse>(
+        '/auth/verify-security-answer',
+        request,
+        { requiresAuth: false }
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while verifying security answer');
+    }
+  }
+
+  /**
+   * Verify reset token validity
+   */
+  async verifyResetToken(token: string): Promise<VerifyResetTokenResponse> {
+    try {
+      const response = await apiClient.get<VerifyResetTokenResponse>(
+        `/auth/verify-reset-token?token=${encodeURIComponent(token)}`,
+        { requiresAuth: false }
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while verifying reset token');
+    }
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(request: ResetPasswordRequest): Promise<string> {
+    try {
+      const response = await apiClient.post<SimpleMessageResponse>(
+        '/auth/reset-password',
+        request,
+        { requiresAuth: false }
+      );
+
+      return response.data.message || 'Password reset successfully';
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while resetting password');
     }
   }
 

@@ -1,6 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import type { User, AuthState, AuthContextType, LoginCredentials, SignUpRequest, ForgotPasswordRequest } from '../types/auth';
+import type { 
+  User, 
+  AuthState, 
+  AuthContextType, 
+  LoginCredentials, 
+  SignUpRequest, 
+  ForgotPasswordRequest,
+  SecurityQuestionResponse,
+  PasswordResetTokenResponse
+} from '../types/auth';
 import { authService, getStoredToken } from '../services';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -138,11 +147,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const forgotPassword = async (request: ForgotPasswordRequest): Promise<string> => {
+  const initiateForgotPassword = async (request: ForgotPasswordRequest) => {
     try {
-      return await authService.forgotPassword(request);
+      return await authService.initiateForgotPassword(request);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred while sending password reset email';
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while initiating password reset';
+      setAuthState(prev => ({
+        ...prev,
+        error: errorMessage,
+      }));
+      throw error;
+    }
+  };
+
+  const verifySecurityAnswer = async (request: { email: string; username: string; security_answer: string }) => {
+    try {
+      return await authService.verifySecurityAnswer(request);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while verifying security answer';
       setAuthState(prev => ({
         ...prev,
         error: errorMessage,
@@ -158,7 +180,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signIn,
     signOut,
     createRegistrationRequest,
-    forgotPassword,
+    initiateForgotPassword,
+    verifySecurityAnswer,
   };
 
   return (

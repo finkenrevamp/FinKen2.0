@@ -9,33 +9,40 @@ import {
   Typography,
   Alert,
   InputAdornment,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
 import {
   ArrowBack,
   Email,
+  Person,
+  QuestionAnswer,
 } from '@mui/icons-material';
-import type { ForgotPasswordRequest } from '../types/auth';
+import type { ForgotPasswordRequest, SecurityQuestionResponse } from '../types/auth';
 import { useAuth } from '../contexts/AuthContext';
 import AuthHeader from '../components/AuthHeader';
 
 const ForgotPassword: React.FC = () => {
-  const { forgotPassword } = useAuth();
+  const { initiateForgotPassword, verifySecurityAnswer } = useAuth();
+  const [step, setStep] = useState<1 | 2 | 3>(1); // 1: Email+Username, 2: Security Question, 3: Success
   const [emailData, setEmailData] = useState<ForgotPasswordRequest>({
     email: '',
-    userId: '', // Not used by the backend but keeping for type compatibility
+    username: '',
   });
+  const [securityQuestion, setSecurityQuestion] = useState<SecurityQuestionResponse | null>(null);
+  const [securityAnswer, setSecurityAnswer] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
     setIsLoading(true);
 
-    if (!emailData.email) {
-      setError('Please enter your email address.');
+    if (!emailData.email || !emailData.username) {
+      setError('Please enter both email address and username.');
       setIsLoading(false);
       return;
     }
@@ -49,13 +56,49 @@ const ForgotPassword: React.FC = () => {
     }
 
     try {
-      const message = await forgotPassword(emailData);
-      setSuccess(message);
+      const response = await initiateForgotPassword(emailData);
+      setSecurityQuestion(response);
+      setStep(2);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred while sending password reset email. Please try again.';
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please check your email and username.';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleStep2Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    if (!securityAnswer.trim()) {
+      setError('Please enter your security answer.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await verifySecurityAnswer({
+        email: emailData.email,
+        username: emailData.username,
+        security_answer: securityAnswer,
+      });
+      setSuccess(response.message);
+      setStep(3);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Incorrect security answer. Please try again.';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    setError(null);
+    if (step === 2) {
+      setSecurityAnswer('');
+      setStep(1);
     }
   };
 
@@ -193,8 +236,12 @@ const ForgotPassword: React.FC = () => {
                 </Alert>
               )}
 
-              {!success && (
-                <Box component="form" onSubmit={handleSubmit}>
+              {step === 1 && (
+                <Box component="form" onSubmit={handleStep1Submit}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Step 1 of 2: Enter your account information
+                  </Typography>
+                  
                   <TextField
                     margin="normal"
                     required
@@ -214,7 +261,25 @@ const ForgotPassword: React.FC = () => {
                         </InputAdornment>
                       ),
                     }}
-                    helperText="We'll send password reset instructions to this email address"
+                  />
+
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    id="username"
+                    label="Username"
+                    name="username"
+                    autoComplete="username"
+                    value={emailData.username}
+                    onChange={(e) => setEmailData(prev => ({ ...prev, username: e.target.value }))}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Person />
+                        </InputAdornment>
+                      ),
+                    }}
                   />
 
                   <Button
@@ -224,7 +289,7 @@ const ForgotPassword: React.FC = () => {
                     sx={{ mt: 3, mb: 2, py: 1.5 }}
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Sending...' : 'Send Reset Link'}
+                    {isLoading ? 'Verifying...' : 'Continue'}
                   </Button>
 
                   <Box sx={{ textAlign: 'center' }}>
@@ -237,6 +302,81 @@ const ForgotPassword: React.FC = () => {
                       </Link>
                     </Typography>
                   </Box>
+                </Box>
+              )}
+
+              {step === 2 && securityQuestion && (
+                <Box component="form" onSubmit={handleStep2Submit}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Step 2 of 2: Answer your security question
+                  </Typography>
+
+                  <Box sx={{ 
+                    bgcolor: '#e3f2fd', 
+                    p: 2, 
+                    borderRadius: 1, 
+                    mb: 3,
+                    border: '1px solid #90caf9'
+                  }}>
+                    <Typography variant="subtitle2" color="primary" gutterBottom>
+                      Security Question:
+                    </Typography>
+                    <Typography variant="body1">
+                      {securityQuestion.question_text}
+                    </Typography>
+                  </Box>
+
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    id="security-answer"
+                    label="Your Answer"
+                    name="security-answer"
+                    autoFocus
+                    value={securityAnswer}
+                    onChange={(e) => setSecurityAnswer(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <QuestionAnswer />
+                        </InputAdornment>
+                      ),
+                    }}
+                    helperText="Your answer is case-sensitive"
+                  />
+
+                  <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handleBack}
+                      sx={{ flex: 1 }}
+                      disabled={isLoading}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      sx={{ flex: 2, py: 1.5 }}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Verifying...' : 'Submit Answer'}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+
+              {step === 3 && (
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Remember your password?{' '}
+                    <Link to="/sign-in" style={{ textDecoration: 'none' }}>
+                      <Button variant="text" size="small">
+                        Sign In
+                      </Button>
+                    </Link>
+                  </Typography>
                 </Box>
               )}
             </Paper>

@@ -35,7 +35,35 @@ export interface FinishSignUpData {
 
 export interface ForgotPasswordRequest {
   email: string;
-  userId: string;
+  username: string;
+}
+
+export interface SecurityQuestionResponse {
+  question_id: number;
+  question_text: string;
+  user_id: string;
+}
+
+export interface VerifySecurityAnswerRequest {
+  email: string;
+  username: string;
+  security_answer: string;
+}
+
+export interface PasswordResetTokenResponse {
+  token: string;
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  new_password: string;
+}
+
+export interface VerifyResetTokenResponse {
+  valid: boolean;
+  message?: string;
+  error?: string;
 }
 
 export interface AuthState {
@@ -51,5 +79,6 @@ export interface AuthContextType extends AuthState {
   signIn: (credentials: LoginCredentials) => Promise<void>;
   signOut: () => Promise<void>;
   createRegistrationRequest: (request: SignUpRequest) => Promise<string>;
-  forgotPassword: (request: ForgotPasswordRequest) => Promise<string>;
+  initiateForgotPassword: (request: ForgotPasswordRequest) => Promise<SecurityQuestionResponse>;
+  verifySecurityAnswer: (request: VerifySecurityAnswerRequest) => Promise<PasswordResetTokenResponse>;
 }

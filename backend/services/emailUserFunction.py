@@ -487,3 +487,76 @@ FinKen 2.0 Team
         body=body,
         html_body=html_body
     )
+
+
+def send_password_reset_email(
+    user_email: str,
+    user_name: str,
+    reset_url: str
+) -> dict:
+    """
+    Send password reset email with link to reset password
+    
+    Args:
+        user_email: Email of the user
+        user_name: Name of the user
+        reset_url: URL to reset password
+        
+    Returns:
+        dict: Response from email service
+    """
+    subject = "FinKen 2.0 - Password Reset Request"
+    
+    body = f"""Dear {user_name},
+
+You recently requested to reset your password for your FinKen 2.0 account.
+
+To reset your password, please click the link below:
+{reset_url}
+
+This link will expire in 1 hour. If you did not request a password reset, please ignore this email or contact your administrator if you have concerns.
+
+For security reasons, we validated your identity through your security question before sending this email.
+
+Best regards,
+FinKen 2.0 Team
+"""
+    
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #1976d2;">Password Reset Request</h2>
+            <p>Dear {user_name},</p>
+            <p>You recently requested to reset your password for your FinKen 2.0 account.</p>
+            
+            <p>To reset your password, please click the button below:</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{reset_url}" style="background-color: #1976d2; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+            </div>
+            
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="background-color: #f5f5f5; padding: 10px; word-break: break-all;">{reset_url}</p>
+            
+            <div style="background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
+                <p style="margin: 0;"><strong>⏱️ Note:</strong> This link will expire in 1 hour.</p>
+            </div>
+            
+            <p>If you did not request a password reset, please ignore this email or contact your administrator if you have concerns.</p>
+            
+            <p style="color: #666; font-size: 14px;">For security reasons, we validated your identity through your security question before sending this email.</p>
+            
+            <p>Best regards,<br>FinKen 2.0 Team</p>
+        </body>
+    </html>
+    """
+    
+    return send_email(
+        sender_email="noreply@job-fit-ai.com",
+        sender_name="FinKen 2.0",
+        receiver_email=user_email,
+        receiver_name=user_name,
+        subject=subject,
+        body=body,
+        html_body=html_body
+    )

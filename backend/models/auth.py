@@ -177,3 +177,35 @@ class PasswordHistory(BaseModelConfig):
     user_id: UUID = Field(..., alias="user_id", description="User UUID")
     password_hash: str = Field(..., alias="password_hash")
     created_at: datetime = Field(default_factory=datetime.utcnow, alias="created_at")
+
+class PasswordResetToken(BaseModelConfig):
+    """Password reset token model"""
+    id: Optional[int] = Field(None, description="Reset token ID")
+    user_id: UUID = Field(..., alias="user_id", description="User UUID")
+    email: EmailStr = Field(..., alias="email")
+    token: str = Field(..., alias="token")
+    expires_at: datetime = Field(..., alias="expires_at")
+    used_at: Optional[datetime] = Field(None, alias="used_at")
+    created_at: datetime = Field(default_factory=datetime.utcnow, alias="created_at")
+
+class InitiateForgotPasswordRequest(BaseModel):
+    """Initiate forgot password request model"""
+    email: EmailStr
+    username: str = Field(..., max_length=255)
+
+class VerifySecurityAnswerRequest(BaseModel):
+    """Verify security answer request model"""
+    email: EmailStr
+    username: str = Field(..., max_length=255)
+    security_answer: str = Field(..., min_length=1)
+
+class SecurityQuestionResponse(BaseModel):
+    """Security question response model"""
+    question_id: int
+    question_text: str
+    user_id: str
+
+class PasswordResetTokenResponse(BaseModel):
+    """Password reset token response model"""
+    token: str
+    message: str

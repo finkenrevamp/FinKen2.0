@@ -3,7 +3,7 @@
  * Handles all authentication-related API calls to the FinKen backend
  */
 
-import { apiClient, storeToken, storeRefreshToken, clearStoredTokens } from './apiClient';
+import { apiClient, storeToken, storeRefreshToken, clearStoredTokens, getStoredToken } from './apiClient';
 import type { 
   LoginCredentials, 
   User, 
@@ -51,6 +51,43 @@ interface RegistrationRequestResponse {
 
 interface SimpleMessageResponse {
   message: string;
+}
+
+interface BackendRegistrationRequest {
+  RequestID: number;
+  FirstName: string;
+  LastName: string;
+  DOB?: string;
+  Address?: string;
+  Email: string;
+  RequestDate: string;
+  Status: string;
+  ReviewedByUserID?: string;
+  ReviewDate?: string;
+}
+
+export interface RegistrationRequestData {
+  id: string;
+  requestId: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  dateOfBirth?: string;
+  address?: string;
+  requestDate: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  reviewDate?: string;
+}
+
+interface ApproveRequestPayload {
+  role_id: number;
+  password: string;
+}
+
+interface RejectRequestPayload {
+  reason: string;
 }
 
 /**
@@ -233,6 +270,104 @@ class AuthService {
       return response.data;
     } catch (error) {
       throw new Error('Authentication service is unavailable');
+    }
+  }
+
+  /**
+   * Get all registration requests (admin only)
+   */
+  async getRegistrationRequests(statusFilter?: string): Promise<RegistrationRequestData[]> {
+    try {
+      // Debug: Check if token exists
+      const token = getStoredToken();
+      console.log('Token exists for registration requests:', !!token);
+      if (token) {
+        console.log('Token preview:', token.substring(0, 20) + '...');
+      }
+      
+      const url = statusFilter 
+        ? `/auth/registration-requests?status_filter=${encodeURIComponent(statusFilter)}`
+        : '/auth/registration-requests';
+      
+      console.log('Fetching registration requests from:', url);
+      const response = await apiClient.get<BackendRegistrationRequest[]>(url);
+      console.log('Registration requests response:', response);
+      
+      // Transform backend data to frontend format
+      return response.data.map((req) => ({
+        id: req.RequestID.toString(),
+        requestId: `REQ${req.RequestID.toString().padStart(3, '0')}`,
+        name: `${req.FirstName} ${req.LastName}`,
+        firstName: req.FirstName,
+        lastName: req.LastName,
+        email: req.Email,
+        dateOfBirth: req.DOB,
+        address: req.Address,
+        requestDate: req.RequestDate,
+        status: req.Status.toLowerCase() as 'pending' | 'approved' | 'rejected',
+        reviewedBy: req.ReviewedByUserID,
+        reviewDate: req.ReviewDate,
+      }));
+    } catch (error) {
+      console.error('Get registration requests error:', error);
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while fetching registration requests');
+    }
+  }
+
+  /**
+   * Approve a registration request (admin only)
+   */
+  async approveRegistrationRequest(
+    requestId: number,
+    roleId: number,
+    password: string
+  ): Promise<{ message: string; username: string; user_id: string }> {
+    try {
+      const payload: ApproveRequestPayload = {
+        role_id: roleId,
+        password: password,
+      };
+
+      const response = await apiClient.post<{ message: string; username: string; user_id: string }>(
+        `/auth/approve-registration/${requestId}`,
+        payload
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while approving registration request');
+    }
+  }
+
+  /**
+   * Reject a registration request (admin only)
+   */
+  async rejectRegistrationRequest(
+    requestId: number,
+    reason: string
+  ): Promise<{ message: string }> {
+    try {
+      const payload: RejectRequestPayload = {
+        reason: reason,
+      };
+
+      const response = await apiClient.post<{ message: string }>(
+        `/auth/reject-registration/${requestId}`,
+        payload
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while rejecting registration request');
     }
   }
 }

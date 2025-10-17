@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -6,6 +6,15 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  MenuItem,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   DataGrid,
@@ -22,109 +31,160 @@ import {
 } from '@mui/icons-material';
 import Header from '../components/Header';
 import type { User } from '../types/auth';
+import { authService, type RegistrationRequestData } from '../services/authService';
 
 interface ManageRegistrationRequestsProps {
   user: User;
   onLogout: () => void;
 }
 
-interface RegistrationRequestData {
-  id: string;
+interface ApprovalDialogData {
   requestId: string;
   name: string;
-  email: string;
-  dateOfBirth: string;
-  address: string;
-  requestDate: string;
-  status: 'pending' | 'approved' | 'rejected';
-  reviewedBy?: string;
-  reviewDate?: string;
+}
+
+interface RejectionDialogData {
+  requestId: string;
+  name: string;
+}
+
+interface ViewDialogData {
+  request: RegistrationRequestData;
 }
 
 const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({ user, onLogout }) => {
-  // Mock data for demonstration - in real app this would come from API
-  const [requests] = useState<RegistrationRequestData[]>([
-    {
-      id: '1',
-      requestId: 'REQ001',
-      name: 'Michael Johnson',
-      email: 'michael.johnson@example.com',
-      dateOfBirth: '1987-05-20',
-      address: '567 Broadway St, New York, NY 10012',
-      requestDate: '2024-03-15',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      requestId: 'REQ002',
-      name: 'Sarah Williams',
-      email: 'sarah.williams@example.com',
-      dateOfBirth: '1992-08-14',
-      address: '890 Sunset Blvd, Los Angeles, CA 90028',
-      requestDate: '2024-03-14',
-      status: 'approved',
-      reviewedBy: 'Admin User',
-      reviewDate: '2024-03-16',
-    },
-    {
-      id: '3',
-      requestId: 'REQ003',
-      name: 'David Miller',
-      email: 'david.miller@example.com',
-      dateOfBirth: '1985-12-03',
-      address: '234 Lake Shore Dr, Chicago, IL 60611',
-      requestDate: '2024-03-13',
-      status: 'rejected',
-      reviewedBy: 'Admin User',
-      reviewDate: '2024-03-15',
-    },
-    {
-      id: '4',
-      requestId: 'REQ004',
-      name: 'Emily Rodriguez',
-      email: 'emily.rodriguez@example.com',
-      dateOfBirth: '1990-02-18',
-      address: '456 River St, Austin, TX 78701',
-      requestDate: '2024-03-12',
-      status: 'pending',
-    },
-    {
-      id: '5',
-      requestId: 'REQ005',
-      name: 'James Thompson',
-      email: 'james.thompson@example.com',
-      dateOfBirth: '1983-09-25',
-      address: '789 Mountain View Dr, Denver, CO 80202',
-      requestDate: '2024-03-11',
-      status: 'approved',
-      reviewedBy: 'Manager User',
-      reviewDate: '2024-03-13',
-    },
-    {
-      id: '6',
-      requestId: 'REQ006',
-      name: 'Lisa Anderson',
-      email: 'lisa.anderson@example.com',
-      dateOfBirth: '1989-06-07',
-      address: '321 Ocean Ave, Miami, FL 33139',
-      requestDate: '2024-03-10',
-      status: 'pending',
-    },
-  ]);
+  const [requests, setRequests] = useState<RegistrationRequestData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // Approval dialog state
+  const [approvalDialog, setApprovalDialog] = useState<ApprovalDialogData | null>(null);
+  const [approvalRoleId, setApprovalRoleId] = useState<number>(3); // Default to Accountant
+  const [approvalPassword, setApprovalPassword] = useState('');
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  
+  // Rejection dialog state
+  const [rejectionDialog, setRejectionDialog] = useState<RejectionDialogData | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionLoading, setRejectionLoading] = useState(false);
+  
+  // View dialog state
+  const [viewDialog, setViewDialog] = useState<ViewDialogData | null>(null);
+
+  // Fetch registration requests on mount
+  useEffect(() => {
+    fetchRegistrationRequests();
+  }, []);
+
+  const fetchRegistrationRequests = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await authService.getRegistrationRequests();
+      setRequests(data);
+    } catch (err) {
+      let errorMessage = 'Failed to load registration requests';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        
+        // Provide more helpful error messages
+        if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+          errorMessage = 'Unauthorized: You must be logged in as an Administrator to view registration requests. Please sign in again.';
+        } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+          errorMessage = 'Access Denied: Only Administrators can view registration requests. Your account does not have the required permissions.';
+        }
+      }
+      
+      setError(errorMessage);
+      console.error('Failed to fetch registration requests:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleApprove = (requestId: string) => {
-    console.log('Approve request:', requestId);
-    // TODO: Implement approve functionality
+    const request = requests.find(r => r.requestId === requestId);
+    if (request) {
+      setApprovalDialog({ requestId, name: request.name });
+      setApprovalRoleId(3); // Default to Accountant
+      setApprovalPassword('');
+    }
+  };
+
+  const handleApproveConfirm = async () => {
+    if (!approvalDialog || !approvalPassword) {
+      return;
+    }
+
+    try {
+      setApprovalLoading(true);
+      setError(null);
+      
+      const requestIdNum = parseInt(approvalDialog.requestId.replace('REQ', ''));
+      const response = await authService.approveRegistrationRequest(
+        requestIdNum,
+        approvalRoleId,
+        approvalPassword
+      );
+      
+      setSuccessMessage(response.message || 'Registration request approved successfully');
+      setApprovalDialog(null);
+      setApprovalPassword('');
+      
+      // Refresh the list
+      await fetchRegistrationRequests();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve registration request';
+      setError(errorMessage);
+    } finally {
+      setApprovalLoading(false);
+    }
   };
 
   const handleReject = (requestId: string) => {
-    console.log('Reject request:', requestId);
-    // TODO: Implement reject functionality
+    const request = requests.find(r => r.requestId === requestId);
+    if (request) {
+      setRejectionDialog({ requestId, name: request.name });
+      setRejectionReason('');
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectionDialog || !rejectionReason) {
+      return;
+    }
+
+    try {
+      setRejectionLoading(true);
+      setError(null);
+      
+      const requestIdNum = parseInt(rejectionDialog.requestId.replace('REQ', ''));
+      const response = await authService.rejectRegistrationRequest(
+        requestIdNum,
+        rejectionReason
+      );
+      
+      setSuccessMessage(response.message || 'Registration request rejected successfully');
+      setRejectionDialog(null);
+      setRejectionReason('');
+      
+      // Refresh the list
+      await fetchRegistrationRequests();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reject registration request';
+      setError(errorMessage);
+    } finally {
+      setRejectionLoading(false);
+    }
   };
 
   const handleView = (requestId: string) => {
-    console.log('View request details:', requestId);
-    // TODO: Implement view functionality
+    const request = requests.find(r => r.requestId === requestId);
+    if (request) {
+      setViewDialog({ request });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -300,77 +360,244 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
           </Box>
         </Box>
 
-        {/* Registration Requests Table */}
-        <Box sx={{ height: 600, width: '100%' }}>
-          <DataGrid
-            rows={requests}
-            columns={columns}
-            slots={{
-              toolbar: GridToolbar,
-            }}
-            slotProps={{
-              toolbar: {
-                showQuickFilter: true,
-                quickFilterProps: { debounceMs: 500 },
-              },
-            }}
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: {
-                paginationModel: {
-                  pageSize: 10,
-                },
-              },
-            }}
-            disableRowSelectionOnClick
-            sx={{
-              '& .MuiDataGrid-root': {
-                border: 'none',
-              },
-              '& .MuiDataGrid-main': {
-                '& .MuiDataGrid-columnHeaders': {
-                  borderBottom: 'none',
-                  backgroundColor: 'grey.50',
-                },
-                '& .MuiDataGrid-cell': {
-                  borderBottom: '1px solid #f0f0f0',
-                  '&:hover': {
+        {/* Error and Success Messages */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+            {successMessage}
+          </Alert>
+        )}
+
+        {/* Loading State */}
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            {/* Registration Requests Table */}
+            <Box sx={{ height: 600, width: '100%' }}>
+              <DataGrid
+                rows={requests}
+                columns={columns}
+                slots={{
+                  toolbar: GridToolbar,
+                }}
+                slotProps={{
+                  toolbar: {
+                    showQuickFilter: true,
+                    quickFilterProps: { debounceMs: 500 },
+                  },
+                }}
+                pageSizeOptions={[5, 10, 25, 50]}
+                initialState={{
+                  pagination: {
+                    paginationModel: {
+                      pageSize: 10,
+                    },
+                  },
+                }}
+                    disableRowSelectionOnClick
+                sx={{
+                  '& .MuiDataGrid-root': {
+                    border: 'none',
+                  },
+                  '& .MuiDataGrid-main': {
+                    '& .MuiDataGrid-columnHeaders': {
+                      borderBottom: 'none',
+                      backgroundColor: 'grey.50',
+                    },
+                    '& .MuiDataGrid-cell': {
+                      borderBottom: '1px solid #f0f0f0',
+                      '&:hover': {
+                        backgroundColor: 'grey.50',
+                      },
+                    },
+                  },
+                  '& .MuiDataGrid-footerContainer': {
+                    borderTop: 'none',
                     backgroundColor: 'grey.50',
                   },
-                },
-              },
-              '& .MuiDataGrid-footerContainer': {
-                borderTop: 'none',
-                backgroundColor: 'grey.50',
-              },
-            }}
-          />
-        </Box>
+                }}
+              />
+            </Box>
 
-        {/* Summary Section */}
-        <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Chip 
-            label={`Total Requests: ${requests.length}`} 
-            color="primary" 
-            variant="outlined"
-          />
-          <Chip 
-            label={`Pending: ${requests.filter(r => r.status === 'pending').length}`} 
-            color="warning" 
-            variant="outlined"
-          />
-          <Chip 
-            label={`Approved: ${requests.filter(r => r.status === 'approved').length}`} 
-            color="success" 
-            variant="outlined"
-          />
-          <Chip 
-            label={`Rejected: ${requests.filter(r => r.status === 'rejected').length}`} 
-            color="error" 
-            variant="outlined"
-          />
-        </Box>
+            {/* Summary Section */}
+            <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Chip 
+                label={`Total Requests: ${requests.length}`} 
+                color="primary" 
+                variant="outlined"
+              />
+              <Chip 
+                label={`Pending: ${requests.filter(r => r.status === 'pending').length}`} 
+                color="warning" 
+                variant="outlined"
+              />
+              <Chip 
+                label={`Approved: ${requests.filter(r => r.status === 'approved').length}`} 
+                color="success" 
+                variant="outlined"
+              />
+              <Chip 
+                label={`Rejected: ${requests.filter(r => r.status === 'rejected').length}`} 
+                color="error" 
+                variant="outlined"
+              />
+            </Box>
+          </>
+        )}
       </Container>
+
+      {/* Approval Dialog */}
+      <Dialog open={!!approvalDialog} onClose={() => setApprovalDialog(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Approve Registration Request</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Approve registration request for <strong>{approvalDialog?.name}</strong>?
+          </Typography>
+          
+          <TextField
+            select
+            fullWidth
+            label="Role"
+            value={approvalRoleId}
+            onChange={(e) => setApprovalRoleId(Number(e.target.value))}
+            sx={{ mb: 2 }}
+          >
+            <MenuItem value={1}>Administrator</MenuItem>
+            <MenuItem value={2}>Manager</MenuItem>
+            <MenuItem value={3}>Accountant</MenuItem>
+          </TextField>
+
+          <TextField
+            fullWidth
+            label="Temporary Password"
+            type="password"
+            value={approvalPassword}
+            onChange={(e) => setApprovalPassword(e.target.value)}
+            helperText="Password must be at least 8 characters, start with a letter, and contain a letter, number, and special character"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApprovalDialog(null)} disabled={approvalLoading}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleApproveConfirm} 
+            variant="contained" 
+            color="success"
+            disabled={approvalLoading || !approvalPassword}
+          >
+            {approvalLoading ? <CircularProgress size={24} /> : 'Approve'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rejection Dialog */}
+      <Dialog open={!!rejectionDialog} onClose={() => setRejectionDialog(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Reject Registration Request</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Reject registration request for <strong>{rejectionDialog?.name}</strong>?
+          </Typography>
+          
+          <TextField
+            fullWidth
+            label="Reason for Rejection"
+            multiline
+            rows={4}
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="Please provide a reason for rejecting this request..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRejectionDialog(null)} disabled={rejectionLoading}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleRejectConfirm} 
+            variant="contained" 
+            color="error"
+            disabled={rejectionLoading || !rejectionReason}
+          >
+            {rejectionLoading ? <CircularProgress size={24} /> : 'Reject'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog open={!!viewDialog} onClose={() => setViewDialog(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Registration Request Details</DialogTitle>
+        <DialogContent>
+          {viewDialog && (
+            <Box sx={{ pt: 2 }}>
+              <Typography variant="subtitle2" color="text.secondary">Request ID</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.requestId}</Typography>
+
+              <Typography variant="subtitle2" color="text.secondary">Name</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.name}</Typography>
+
+              <Typography variant="subtitle2" color="text.secondary">Email</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.email}</Typography>
+
+              {viewDialog.request.dateOfBirth && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary">Date of Birth</Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {new Date(viewDialog.request.dateOfBirth).toLocaleDateString()}
+                  </Typography>
+                </>
+              )}
+
+              {viewDialog.request.address && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary">Address</Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.address}</Typography>
+                </>
+              )}
+
+              <Typography variant="subtitle2" color="text.secondary">Request Date</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                {new Date(viewDialog.request.requestDate).toLocaleDateString()}
+              </Typography>
+
+              <Typography variant="subtitle2" color="text.secondary">Status</Typography>
+              <Chip
+                label={viewDialog.request.status.charAt(0).toUpperCase() + viewDialog.request.status.slice(1)}
+                color={getStatusColor(viewDialog.request.status) as any}
+                size="small"
+                sx={{ mb: 2 }}
+              />
+
+              {viewDialog.request.reviewedBy && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>Reviewed By</Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.reviewedBy}</Typography>
+                </>
+              )}
+
+              {viewDialog.request.reviewDate && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary">Review Date</Typography>
+                  <Typography variant="body1">
+                    {new Date(viewDialog.request.reviewDate).toLocaleDateString()}
+                  </Typography>
+                </>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewDialog(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

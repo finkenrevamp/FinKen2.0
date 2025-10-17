@@ -56,11 +56,8 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
     try:
         supabase = get_supabase_client()
         
-        # Set the session token
-        supabase.auth.set_session(credentials.credentials, "")
-        
-        # Get current user
-        user_response = supabase.auth.get_user()
+        # Get current user directly from the access token without setting session
+        user_response = supabase.auth.get_user(credentials.credentials)
         if not user_response or not user_response.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

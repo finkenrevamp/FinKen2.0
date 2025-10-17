@@ -109,8 +109,12 @@ class ApiClient {
     // Add authorization header if token exists and auth is required
     if (config?.requiresAuth !== false) {
       const token = getStoredToken();
+      console.log('buildHeaders - requiresAuth:', config?.requiresAuth, 'token exists:', !!token);
       if (token) {
         headers.Authorization = `Bearer ${token}`;
+        console.log('Added Authorization header');
+      } else {
+        console.warn('No token found in localStorage!');
       }
     }
 
@@ -142,6 +146,15 @@ class ApiClient {
     if (body && method !== 'GET') {
       requestInit.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
+
+    // Debug logging
+    console.log('API Request:', {
+      method,
+      url,
+      requiresAuth,
+      hasAuthHeader: !!headers.Authorization,
+      authHeaderPreview: headers.Authorization?.substring(0, 30) + '...',
+    });
 
     try {
       const response = await fetch(url, requestInit);

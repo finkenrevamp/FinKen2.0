@@ -20,6 +20,9 @@ import Users from './pages/Users';
 import ManageRegistrationRequests from './pages/ManageRegistrationRequests';
 import PasswordExpiry from './pages/PasswordExpiry';
 
+// Import logo
+import finkenLogo from './assets/finken2.0logoTransparent.png';
+
 import './App.css'
 
 // Create Material UI theme
@@ -54,7 +57,30 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         }}
       >
         <Box sx={{ textAlign: 'center', color: 'white' }}>
-          <Typography variant="h4" gutterBottom>
+          <Box
+            component="img"
+            src={finkenLogo}
+            alt="FinKen Logo"
+            sx={{
+              height: { xs: 100, sm: 120, md: 150 },
+              width: 'auto',
+              mb: 3,
+              filter: 'brightness(0) invert(1) drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
+              animation: 'pulse 2s ease-in-out infinite',
+              '@keyframes pulse': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0.6 },
+              },
+            }}
+          />
+          <Typography 
+            variant="h4" 
+            gutterBottom
+            sx={{ 
+              fontFamily: '"Sansation", system-ui, sans-serif',
+              fontWeight: 'bold',
+            }}
+          >
             FinKen 2.0
           </Typography>
           <Typography variant="body1">
@@ -88,7 +114,30 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }}
       >
         <Box sx={{ textAlign: 'center', color: 'white' }}>
-          <Typography variant="h4" gutterBottom>
+          <Box
+            component="img"
+            src={finkenLogo}
+            alt="FinKen Logo"
+            sx={{
+              height: { xs: 100, sm: 120, md: 150 },
+              width: 'auto',
+              mb: 3,
+              filter: 'brightness(0) invert(1) drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
+              animation: 'pulse 2s ease-in-out infinite',
+              '@keyframes pulse': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0.6 },
+              },
+            }}
+          />
+          <Typography 
+            variant="h4" 
+            gutterBottom
+            sx={{ 
+              fontFamily: '"Sansation", system-ui, sans-serif',
+              fontWeight: 'bold',
+            }}
+          >
             FinKen 2.0
           </Typography>
           <Typography variant="body1">

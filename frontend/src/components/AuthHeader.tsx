@@ -64,6 +64,7 @@ const AuthHeader: React.FC = () => {
           component="h1" 
           variant="h2" 
           sx={{ 
+            fontFamily: '"Sansation", system-ui, sans-serif',
             fontWeight: 'bold', 
             color: 'white',
             textShadow: '0 2px 4px rgba(0,0,0,0.5)',

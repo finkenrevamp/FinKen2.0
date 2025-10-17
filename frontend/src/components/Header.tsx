@@ -16,6 +16,10 @@ import {
   AccountCircle,
   ExitToApp,
   Settings,
+  ArrowDropDown,
+  People,
+  PersonAdd,
+  VpnKey,
 } from '@mui/icons-material';
 import type { User } from '../types/auth';
 import finkenLogo from '../assets/finken2.0logoTransparent.png';
@@ -28,6 +32,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [adminMenuAnchor, setAdminMenuAnchor] = React.useState<null | HTMLElement>(null);
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -35,6 +40,19 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
   const handleProfileMenuClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleAdminMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAdminMenuAnchor(event.currentTarget);
+  };
+
+  const handleAdminMenuClose = () => {
+    setAdminMenuAnchor(null);
+  };
+
+  const handleAdminNavigation = (path: string) => {
+    handleAdminMenuClose();
+    navigate(path);
   };
 
   const handleLogout = () => {
@@ -74,7 +92,20 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
     >
       <Toolbar sx={{ px: { xs: 2, sm: 4 } }}>
         {/* Logo and App Name */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            mr: 4,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              transform: 'scale(1.02)',
+              opacity: 0.9,
+            },
+          }}
+          onClick={() => navigate('/home')}
+        >
           <Box
             component="img"
             src={finkenLogo}
@@ -90,6 +121,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
             variant="h5" 
             component="div" 
             sx={{ 
+              fontFamily: '"Sansation", system-ui, sans-serif',
               fontWeight: 'bold',
               background: 'linear-gradient(45deg, #ffffff 30%, #e3f2fd 90%)',
               backgroundClip: 'text',
@@ -108,52 +140,82 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
             <>
               <Button
                 color="inherit"
-                onClick={() => navigate('/users')}
+                onClick={handleAdminMenuOpen}
+                endIcon={<ArrowDropDown />}
                 sx={{ 
                   textTransform: 'none',
                   borderRadius: 2,
                   px: 3,
+                  backgroundColor: 'rgba(100, 181, 246, 0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
                   '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: 'rgba(100, 181, 246, 0.5)',
                     transform: 'translateY(-1px)',
                   },
                   transition: 'all 0.2s ease-in-out',
                 }}
               >
-                Users
+                Admin Utilities
               </Button>
-              <Button
-                color="inherit"
-                onClick={() => navigate('/registrations')}
-                sx={{ 
-                  textTransform: 'none',
-                  borderRadius: 2,
-                  px: 3,
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    transform: 'translateY(-1px)',
+              <Menu
+                id="admin-menu"
+                anchorEl={adminMenuAnchor}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'left',
+                }}
+                keepMounted
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'left',
+                }}
+                open={Boolean(adminMenuAnchor)}
+                onClose={handleAdminMenuClose}
+                sx={{
+                  '& .MuiPaper-root': {
+                    mt: 1,
+                    borderRadius: 2,
+                    minWidth: 200,
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+                    backdropFilter: 'blur(10px)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                   },
-                  transition: 'all 0.2s ease-in-out',
                 }}
               >
-                Registrations
-              </Button>
-              <Button
-                color="inherit"
-                onClick={() => navigate('/expiring-passwords')}
-                sx={{ 
-                  textTransform: 'none',
-                  borderRadius: 2,
-                  px: 3,
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    transform: 'translateY(-1px)',
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                }}
-              >
-                Expiring Passwords
-              </Button>
+                <MenuItem 
+                  onClick={() => handleAdminNavigation('/users')}
+                  sx={{
+                    '&:hover': {
+                      backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    },
+                  }}
+                >
+                  <People sx={{ mr: 1 }} />
+                  Users
+                </MenuItem>
+                <MenuItem 
+                  onClick={() => handleAdminNavigation('/registrations')}
+                  sx={{
+                    '&:hover': {
+                      backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    },
+                  }}
+                >
+                  <PersonAdd sx={{ mr: 1 }} />
+                  Registrations
+                </MenuItem>
+                <MenuItem 
+                  onClick={() => handleAdminNavigation('/expiring-passwords')}
+                  sx={{
+                    '&:hover': {
+                      backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    },
+                  }}
+                >
+                  <VpnKey sx={{ mr: 1 }} />
+                  Expiring Passwords
+                </MenuItem>
+              </Menu>
             </>
           )}
         </Box>

@@ -22,6 +22,7 @@ import {
 import type { SignUpRequest } from '../types/auth';
 import { useAuth } from '../contexts/AuthContext';
 import AuthHeader from '../components/AuthHeader';
+import AnimatedBackground from '../components/AnimatedBackground';
 
 const SignUp: React.FC = () => {
   const { createRegistrationRequest } = useAuth();
@@ -124,68 +125,7 @@ const SignUp: React.FC = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <AuthHeader />
-      <Box
-        sx={{
-          minHeight: '100vh',
-          width: '100vw',
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          overflow: 'hidden',
-          background: 'linear-gradient(135deg, #001f3f 0%, #003366 25%, #004080 50%, #0066cc 75%, #1a8cff 100%)',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: `
-              radial-gradient(circle at 20% 80%, rgba(0, 150, 255, 0.3) 0%, transparent 50%),
-              radial-gradient(circle at 80% 20%, rgba(0, 100, 200, 0.4) 0%, transparent 50%),
-              radial-gradient(circle at 40% 40%, rgba(0, 200, 255, 0.2) 0%, transparent 50%)
-            `,
-            animation: 'underwater 8s ease-in-out infinite alternate',
-          },
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: `
-              radial-gradient(circle at 60% 30%, rgba(100, 200, 255, 0.2) 0%, transparent 60%),
-              radial-gradient(circle at 30% 70%, rgba(0, 180, 255, 0.3) 0%, transparent 40%)
-            `,
-            animation: 'underwater-reverse 10s ease-in-out infinite alternate',
-          },
-          '@keyframes underwater': {
-            '0%': {
-              opacity: 0.6,
-            },
-            '50%': {
-              opacity: 0.9,
-            },
-            '100%': {
-              opacity: 0.7,
-            },
-          },
-          '@keyframes underwater-reverse': {
-            '0%': {
-              opacity: 0.8,
-            },
-            '50%': {
-              opacity: 0.4,
-            },
-            '100%': {
-              opacity: 0.9,
-            },
-          },
-        }}
-      >
+      <AnimatedBackground>
         <Container component="main" maxWidth="md" sx={{ 
           position: 'relative', 
           zIndex: 10, // Higher z-index to appear above header
@@ -357,7 +297,7 @@ const SignUp: React.FC = () => {
           </Paper>
           </Box>
         </Container>
-      </Box>
+      </AnimatedBackground>
     </LocalizationProvider>
   );
 };

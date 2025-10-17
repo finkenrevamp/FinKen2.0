@@ -19,6 +19,13 @@ import Home from './pages/Home';
 import Users from './pages/Users';
 import ManageRegistrationRequests from './pages/ManageRegistrationRequests';
 import PasswordExpiry from './pages/PasswordExpiry';
+import Journalize from './pages/Journalize';
+import ChartOfAccounts from './pages/ChartOfAccounts';
+import EventLogs from './pages/EventLogs';
+import TrialBalance from './pages/TrialBalance';
+import IncomeStatement from './pages/IncomeStatement';
+import RetainedEarnings from './pages/RetainedEarnings';
+import BalanceSheet from './pages/BalanceSheet';
 
 // Import logo
 import finkenLogo from './assets/finken2.0logoTransparent.png';
@@ -235,6 +242,66 @@ const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             {user && <PasswordExpiry user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Accounting routes */}
+      <Route
+        path="/journalize"
+        element={
+          <ProtectedRoute>
+            {user && <Journalize user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chart-of-accounts"
+        element={
+          <ProtectedRoute>
+            {user && <ChartOfAccounts user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/event-logs"
+        element={
+          <ProtectedRoute>
+            {user && <EventLogs user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Report routes */}
+      <Route
+        path="/trial-balance"
+        element={
+          <ProtectedRoute>
+            {user && <TrialBalance user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/income-statement"
+        element={
+          <ProtectedRoute>
+            {user && <IncomeStatement user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/retained-earnings"
+        element={
+          <ProtectedRoute>
+            {user && <RetainedEarnings user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/balance-sheet"
+        element={
+          <ProtectedRoute>
+            {user && <BalanceSheet user={user} onLogout={logout} />}
           </ProtectedRoute>
         }
       />

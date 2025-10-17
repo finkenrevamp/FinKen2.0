@@ -20,6 +20,10 @@ import {
   People,
   PersonAdd,
   VpnKey,
+  Create,
+  AccountTree,
+  History,
+  Assessment,
 } from '@mui/icons-material';
 import type { User } from '../types/auth';
 import finkenLogo from '../assets/finken2.0logoTransparent.png';
@@ -33,6 +37,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [adminMenuAnchor, setAdminMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [reportsMenuAnchor, setReportsMenuAnchor] = React.useState<null | HTMLElement>(null);
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -50,8 +55,21 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
     setAdminMenuAnchor(null);
   };
 
+  const handleReportsMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setReportsMenuAnchor(event.currentTarget);
+  };
+
+  const handleReportsMenuClose = () => {
+    setReportsMenuAnchor(null);
+  };
+
   const handleAdminNavigation = (path: string) => {
     handleAdminMenuClose();
+    navigate(path);
+  };
+
+  const handleReportsNavigation = (path: string) => {
+    handleReportsMenuClose();
     navigate(path);
   };
 
@@ -136,6 +154,150 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
         {/* Navigation Menu */}
         <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
+          {/* Journalize Button */}
+          <Button
+            color="inherit"
+            onClick={() => navigate('/journalize')}
+            startIcon={<Create />}
+            sx={{ 
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                transform: 'translateY(-1px)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            Journalize
+          </Button>
+
+          {/* Chart of Accounts Button */}
+          <Button
+            color="inherit"
+            onClick={() => navigate('/chart-of-accounts')}
+            startIcon={<AccountTree />}
+            sx={{ 
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                transform: 'translateY(-1px)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            Chart of Accounts
+          </Button>
+
+          {/* Event Logs Button */}
+          <Button
+            color="inherit"
+            onClick={() => navigate('/event-logs')}
+            startIcon={<History />}
+            sx={{ 
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                transform: 'translateY(-1px)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            Event Logs
+          </Button>
+
+          {/* Reports Dropdown */}
+          <Button
+            color="inherit"
+            onClick={handleReportsMenuOpen}
+            endIcon={<ArrowDropDown />}
+            startIcon={<Assessment />}
+            sx={{ 
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                transform: 'translateY(-1px)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            Reports
+          </Button>
+          <Menu
+            id="reports-menu"
+            anchorEl={reportsMenuAnchor}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            keepMounted
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
+            }}
+            open={Boolean(reportsMenuAnchor)}
+            onClose={handleReportsMenuClose}
+            sx={{
+              '& .MuiPaper-root': {
+                mt: 1,
+                borderRadius: 2,
+                minWidth: 200,
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+                backdropFilter: 'blur(10px)',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              },
+            }}
+          >
+            <MenuItem 
+              onClick={() => handleReportsNavigation('/trial-balance')}
+              sx={{
+                '&:hover': {
+                  backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                },
+              }}
+            >
+              Trial Balance
+            </MenuItem>
+            <MenuItem 
+              onClick={() => handleReportsNavigation('/income-statement')}
+              sx={{
+                '&:hover': {
+                  backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                },
+              }}
+            >
+              Income Statement
+            </MenuItem>
+            <MenuItem 
+              onClick={() => handleReportsNavigation('/retained-earnings')}
+              sx={{
+                '&:hover': {
+                  backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                },
+              }}
+            >
+              Retained Earnings
+            </MenuItem>
+            <MenuItem 
+              onClick={() => handleReportsNavigation('/balance-sheet')}
+              sx={{
+                '&:hover': {
+                  backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                },
+              }}
+            >
+              Balance Sheet
+            </MenuItem>
+          </Menu>
+
+          {/* Admin Utilities (Admin only) */}
           {user.role === 'Administrator' && (
             <>
               <Button

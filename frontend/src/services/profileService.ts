@@ -53,6 +53,29 @@ export interface SuspendUserRequest {
 }
 
 /**
+ * Password expiry data interface
+ */
+export interface PasswordExpiryData {
+  id: string;
+  user_id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: string;
+  password_created_date: string | null;
+  password_expiry_date: string | null;
+  days_until_expiry: number | null;
+  status: 'expired' | 'expiring_soon' | 'normal' | 'no_password';
+}
+
+/**
+ * Send password reminder request interface
+ */
+export interface SendPasswordReminderRequest {
+  days_until_expiry: number;
+}
+
+/**
  * Profile Service class
  */
 export class ProfileService {
@@ -125,6 +148,25 @@ export class ProfileService {
   async deactivateUser(userId: string): Promise<{ message: string; user_id: string }> {
     const response = await apiClient.post<{ message: string; user_id: string }>(
       `profiles/users/${userId}/deactivate`
+    );
+    return response.data;
+  }
+
+  /**
+   * Get password expiry data for all users (admin only)
+   */
+  async getPasswordExpiry(): Promise<PasswordExpiryData[]> {
+    const response = await apiClient.get<PasswordExpiryData[]>('profiles/users/password-expiry');
+    return response.data;
+  }
+
+  /**
+   * Send password expiry reminder to user (admin only)
+   */
+  async sendPasswordExpiryReminder(userId: string, daysUntilExpiry: number): Promise<{ message: string; user_id: string; email: string }> {
+    const response = await apiClient.post<{ message: string; user_id: string; email: string }>(
+      `profiles/users/${userId}/send-password-reminder`,
+      { days_until_expiry: daysUntilExpiry }
     );
     return response.data;
   }

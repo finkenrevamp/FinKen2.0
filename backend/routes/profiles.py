@@ -5,14 +5,14 @@ Profiles routes - User management functionality
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from uuid import UUID
 from pydantic import BaseModel, EmailStr
 import logging
 
 from models.auth import Profile, ProfileUpdate
 from services.supabase import get_supabase_service, get_supabase_client, set_current_user
-from services.emailUserFunction import send_email
+from services.emailUserFunction import send_email, send_password_expiry_notification
 
 router = APIRouter()
 security = HTTPBearer()
@@ -56,6 +56,25 @@ class SendEmailRequest(BaseModel):
 class SuspendUserRequest(BaseModel):
     """Suspend user request"""
     suspension_end_date: date
+
+
+class PasswordExpiryData(BaseModel):
+    """Password expiry data for a user"""
+    id: str
+    user_id: str
+    username: str
+    name: str
+    email: str
+    role: str
+    password_created_date: Optional[date] = None
+    password_expiry_date: Optional[date] = None
+    days_until_expiry: Optional[int] = None
+    status: str  # 'expired', 'expiring_soon', 'normal', 'no_password'
+
+
+class SendPasswordReminderRequest(BaseModel):
+    """Send password expiry reminder request"""
+    days_until_expiry: int
 
 
 async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Profile:
@@ -191,6 +210,181 @@ async def get_all_users(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while fetching users: {str(e)}"
+        )
+
+
+@router.get("/users/password-expiry", response_model=List[PasswordExpiryData])
+async def get_password_expiry_data(
+    current_user: Profile = Depends(require_admin)
+):
+    """
+    Get password expiry data for all users (admin only)
+    Calculates expiry dates based on password creation date + 90 days
+    """
+    try:
+        supabase = get_supabase_client()
+        service_client = get_supabase_service().get_service_client()
+        
+        # Get all profiles
+        profiles_response = supabase.from_("profiles").select("*").execute()
+        
+        # Password expiry period in days (90 days as per Sprint requirement #15)
+        PASSWORD_EXPIRY_DAYS = 90
+        EXPIRING_SOON_THRESHOLD = 7  # Consider expiring soon if <= 7 days
+        
+        password_expiry_list = []
+        today = date.today()
+        
+        for profile in profiles_response.data:
+            try:
+                user_id = profile.get("id")
+                
+                # Get user email from auth.users
+                auth_user_response = service_client.auth.admin.get_user_by_id(user_id)
+                email = auth_user_response.user.email if auth_user_response and auth_user_response.user and auth_user_response.user.email else "N/A"
+                
+                # Get role name
+                role_id = profile.get("RoleID")
+                role_name = "Unknown"
+                if role_id:
+                    role_response = supabase.from_("roles").select("RoleName").eq("RoleID", role_id).single().execute()
+                    if role_response.data:
+                        role_name = role_response.data.get("RoleName", "Unknown")
+                
+                # Get most recent password from password_history
+                # Query to get the most recent password creation date for this user
+                password_history_response = supabase.from_("password_history")\
+                    .select("created_at")\
+                    .eq("user_id", user_id)\
+                    .order("created_at", desc=True)\
+                    .limit(1)\
+                    .execute()
+                
+                password_created_date = None
+                password_expiry_date = None
+                days_until_expiry = None
+                password_status = "no_password"
+                
+                if password_history_response.data and len(password_history_response.data) > 0:
+                    # Get the password creation timestamp
+                    created_at_str = password_history_response.data[0].get("created_at")
+                    
+                    if created_at_str:
+                        # Parse the datetime and extract date
+                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                        password_created_date = created_at.date()
+                        
+                        # Calculate expiry date (90 days from creation)
+                        password_expiry_date = password_created_date + timedelta(days=PASSWORD_EXPIRY_DAYS)
+                        
+                        # Calculate days until expiry
+                        days_until_expiry = (password_expiry_date - today).days
+                        
+                        # Determine status
+                        if days_until_expiry < 0:
+                            password_status = "expired"
+                        elif days_until_expiry <= EXPIRING_SOON_THRESHOLD:
+                            password_status = "expiring_soon"
+                        else:
+                            password_status = "normal"
+                
+                user_name = f"{profile.get('FirstName', '')} {profile.get('LastName', '')}"
+                
+                password_expiry_list.append(PasswordExpiryData(
+                    id=str(user_id),
+                    user_id=str(user_id),
+                    username=profile.get("Username", ""),
+                    name=user_name,
+                    email=email,
+                    role=role_name,
+                    password_created_date=password_created_date,
+                    password_expiry_date=password_expiry_date,
+                    days_until_expiry=days_until_expiry,
+                    status=password_status
+                ))
+                
+            except Exception as e:
+                logger.error(f"Error processing password expiry for user {profile.get('id')}: {e}")
+                continue
+        
+        return password_expiry_list
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get password expiry data error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while fetching password expiry data: {str(e)}"
+        )
+
+
+@router.post("/users/{user_id}/send-password-reminder")
+async def send_password_reminder(
+    user_id: str,
+    reminder_data: SendPasswordReminderRequest,
+    current_user: Profile = Depends(require_admin)
+):
+    """Send password expiry reminder email to user (admin only)"""
+    try:
+        supabase = get_supabase_client()
+        service_client = get_supabase_service().get_service_client()
+        
+        # Get user profile
+        profile_response = supabase.from_("profiles").select("*").eq("id", user_id).single().execute()
+        
+        if not profile_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        profile = profile_response.data
+        user_name = f"{profile.get('FirstName', '')} {profile.get('LastName', '')}"
+        
+        # Get user email from auth.users
+        auth_user_response = service_client.auth.admin.get_user_by_id(user_id)
+        if not auth_user_response or not auth_user_response.user or not auth_user_response.user.email:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User email not found"
+            )
+        
+        user_email = auth_user_response.user.email
+        
+        # Get admin email
+        admin_auth_response = service_client.auth.admin.get_user_by_id(str(current_user.id))
+        admin_email = admin_auth_response.user.email if admin_auth_response and admin_auth_response.user and admin_auth_response.user.email else "admin@finken.com"
+        admin_name = f"{current_user.first_name} {current_user.last_name}"
+        
+        # Send password expiry notification
+        result = send_password_expiry_notification(
+            admin_email=admin_email or "admin@finken.com",
+            admin_name=admin_name,
+            user_email=user_email,
+            user_name=user_name,
+            days_until_expiry=reminder_data.days_until_expiry
+        )
+        
+        if result.get("success"):
+            return {
+                "message": "Password expiry reminder sent successfully",
+                "user_id": user_id,
+                "email": user_email
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send password expiry reminder"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send password reminder error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while sending password reminder: {str(e)}"
         )
 
 

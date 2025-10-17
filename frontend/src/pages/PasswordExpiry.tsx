@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -6,6 +6,9 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Alert,
+  CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import {
   DataGrid,
@@ -20,120 +23,71 @@ import {
 } from '@mui/icons-material';
 import Header from '../components/Header';
 import type { User } from '../types/auth';
+import { profileService, type PasswordExpiryData } from '../services/profileService';
 
 interface PasswordExpiryProps {
   user: User;
   onLogout: () => void;
 }
 
-interface PasswordExpiryData {
-  id: string;
-  userId: string;
-  username: string;
-  name: string;
-  email: string;
-  role: string;
-  passwordExpiryDate: string;
-  daysUntilExpiry: number;
-  status: 'expired' | 'expiring_soon' | 'normal';
-}
-
 const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
-  // Mock data for demonstration - in real app this would come from API
-  const [passwordData] = useState<PasswordExpiryData[]>([
-    {
-      id: '1',
-      userId: 'USR001',
-      username: 'mjohnson',
-      name: 'Michael Johnson',
-      email: 'michael.johnson@example.com',
-      role: 'User',
-      passwordExpiryDate: '2024-10-20',
-      daysUntilExpiry: 6,
-      status: 'expiring_soon',
-    },
-    {
-      id: '2',
-      userId: 'USR002',
-      username: 'swilliams',
-      name: 'Sarah Williams',
-      email: 'sarah.williams@example.com',
-      role: 'Manager',
-      passwordExpiryDate: '2024-10-12',
-      daysUntilExpiry: -2,
-      status: 'expired',
-    },
-    {
-      id: '3',
-      userId: 'USR003',
-      username: 'dmiller',
-      name: 'David Miller',
-      email: 'david.miller@example.com',
-      role: 'Admin',
-      passwordExpiryDate: '2024-11-15',
-      daysUntilExpiry: 32,
-      status: 'normal',
-    },
-    {
-      id: '4',
-      userId: 'USR004',
-      username: 'erodriguez',
-      name: 'Emily Rodriguez',
-      email: 'emily.rodriguez@example.com',
-      role: 'User',
-      passwordExpiryDate: '2024-10-18',
-      daysUntilExpiry: 4,
-      status: 'expiring_soon',
-    },
-    {
-      id: '5',
-      userId: 'USR005',
-      username: 'jthompson',
-      name: 'James Thompson',
-      email: 'james.thompson@example.com',
-      role: 'Manager',
-      passwordExpiryDate: '2024-12-01',
-      daysUntilExpiry: 48,
-      status: 'normal',
-    },
-    {
-      id: '6',
-      userId: 'USR006',
-      username: 'landerson',
-      name: 'Lisa Anderson',
-      email: 'lisa.anderson@example.com',
-      role: 'User',
-      passwordExpiryDate: '2024-10-10',
-      daysUntilExpiry: -4,
-      status: 'expired',
-    },
-    {
-      id: '7',
-      userId: 'USR007',
-      username: 'rbrown',
-      name: 'Robert Brown',
-      email: 'robert.brown@example.com',
-      role: 'User',
-      passwordExpiryDate: '2024-10-22',
-      daysUntilExpiry: 8,
-      status: 'expiring_soon',
-    },
-    {
-      id: '8',
-      userId: 'USR008',
-      username: 'kwilson',
-      name: 'Karen Wilson',
-      email: 'karen.wilson@example.com',
-      role: 'Admin',
-      passwordExpiryDate: '2024-11-30',
-      daysUntilExpiry: 47,
-      status: 'normal',
-    },
-  ]);
+  const [passwordData, setPasswordData] = useState<PasswordExpiryData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({ open: false, message: '', severity: 'success' });
 
-  const handleSendReminder = (userId: string, email: string) => {
-    console.log('Send reminder to user:', userId, email);
-    // TODO: Implement send reminder functionality
+  // Fetch password expiry data
+  useEffect(() => {
+    const fetchPasswordData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await profileService.getPasswordExpiry();
+        setPasswordData(data);
+      } catch (err: any) {
+        console.error('Error fetching password expiry data:', err);
+        setError(err.response?.data?.detail || 'Failed to load password expiry data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPasswordData();
+  }, []);
+
+  const handleSendReminder = async (userId: string, email: string, daysUntilExpiry: number | null) => {
+    try {
+      if (daysUntilExpiry === null) {
+        setSnackbar({
+          open: true,
+          message: 'Cannot send reminder: No password expiry date available',
+          severity: 'error',
+        });
+        return;
+      }
+
+      await profileService.sendPasswordExpiryReminder(userId, daysUntilExpiry);
+      setSnackbar({
+        open: true,
+        message: `Password expiry reminder sent successfully to ${email}`,
+        severity: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error sending reminder:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.detail || 'Failed to send password expiry reminder',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const getStatusColor = (status: string) => {
@@ -157,6 +111,8 @@ const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
         return 'Expiring Soon';
       case 'normal':
         return 'Normal';
+      case 'no_password':
+        return 'No Password';
       default:
         return 'Unknown';
     }
@@ -191,11 +147,12 @@ const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
 
   const columns: GridColDef[] = useMemo(() => [
     {
-      field: 'userId',
+      field: 'user_id',
       headerName: 'User ID',
       width: 100,
       sortable: true,
       filterable: true,
+      valueGetter: (params: any) => params.row?.user_id ? params.row.user_id.substring(0, 8) : '',
     },
     {
       field: 'username',
@@ -234,23 +191,29 @@ const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
       ),
     },
     {
-      field: 'passwordExpiryDate',
+      field: 'password_expiry_date',
       headerName: 'Password Expiry Date',
       width: 190,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {
+        if (!params.value) {
+          return <Typography variant="body2" color="text.secondary">N/A</Typography>;
+        }
         return new Date(params.value).toLocaleDateString();
       },
     },
     {
-      field: 'daysUntilExpiry',
+      field: 'days_until_expiry',
       headerName: 'Days Until Expiry',
       width: 200,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {
-        const days = params.value as number;
+        const days = params.value as number | null;
+        if (days === null) {
+          return <Typography variant="body2" color="text.secondary">N/A</Typography>;
+        }
         return (
           <Typography
             variant="body2"
@@ -301,7 +264,7 @@ const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
             <Tooltip title="Send Reminder">
               <IconButton
                 size="small"
-                onClick={() => handleSendReminder(passwordData.userId, passwordData.email)}
+                onClick={() => handleSendReminder(passwordData.user_id, passwordData.email, passwordData.days_until_expiry)}
                 sx={{ 
                   color: 'primary.main',
                   '&:hover': { backgroundColor: 'primary.light', color: 'white' }
@@ -333,85 +296,115 @@ const PasswordExpiry: React.FC<PasswordExpiryProps> = ({ user, onLogout }) => {
           </Box>
         </Box>
 
+        {/* Error Alert */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 4 }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
         {/* Password Expiry Table */}
-        <Box sx={{ height: 600, width: '100%' }}>
-          <DataGrid
-            rows={passwordData}
-            columns={columns}
-            slots={{
-              toolbar: GridToolbar,
-            }}
-            slotProps={{
-              toolbar: {
-                showQuickFilter: true,
-                quickFilterProps: { debounceMs: 500 },
-              },
-            }}
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: {
-                paginationModel: {
-                  pageSize: 10,
+        {!loading && !error && (
+          <Box sx={{ height: 600, width: '100%' }}>
+            <DataGrid
+              rows={passwordData}
+              columns={columns}
+              slots={{
+                toolbar: GridToolbar,
+              }}
+              slotProps={{
+                toolbar: {
+                  showQuickFilter: true,
+                  quickFilterProps: { debounceMs: 500 },
                 },
-              },
-              sorting: {
-                sortModel: [
-                  {
-                    field: 'daysUntilExpiry',
-                    sort: 'asc',
+              }}
+              pageSizeOptions={[5, 10, 25, 50]}
+              initialState={{
+                pagination: {
+                  paginationModel: {
+                    pageSize: 10,
                   },
-                ],
-              },
-            }}
-            disableRowSelectionOnClick
-            sx={{
-              '& .MuiDataGrid-root': {
-                border: 'none',
-              },
-              '& .MuiDataGrid-main': {
-                '& .MuiDataGrid-columnHeaders': {
-                  borderBottom: 'none',
-                  backgroundColor: 'grey.50',
                 },
-                '& .MuiDataGrid-cell': {
-                  borderBottom: '1px solid #f0f0f0',
-                  '&:hover': {
+                sorting: {
+                  sortModel: [
+                    {
+                      field: 'days_until_expiry',
+                      sort: 'asc',
+                    },
+                  ],
+                },
+              }}
+              disableRowSelectionOnClick
+              sx={{
+                '& .MuiDataGrid-root': {
+                  border: 'none',
+                },
+                '& .MuiDataGrid-main': {
+                  '& .MuiDataGrid-columnHeaders': {
+                    borderBottom: 'none',
                     backgroundColor: 'grey.50',
                   },
+                  '& .MuiDataGrid-cell': {
+                    borderBottom: '1px solid #f0f0f0',
+                    '&:hover': {
+                      backgroundColor: 'grey.50',
+                    },
+                  },
                 },
-              },
-              '& .MuiDataGrid-footerContainer': {
-                borderTop: 'none',
-                backgroundColor: 'grey.50',
-              },
-            }}
-          />
-        </Box>
+                '& .MuiDataGrid-footerContainer': {
+                  borderTop: 'none',
+                  backgroundColor: 'grey.50',
+                },
+              }}
+            />
+          </Box>
+        )}
 
         {/* Summary Section */}
-        <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Chip 
-            label={`Total Users: ${passwordData.length}`} 
-            color="primary" 
-            variant="outlined"
-          />
-          <Chip 
-            label={`Expired: ${passwordData.filter(p => p.status === 'expired').length}`} 
-            color="error" 
-            variant="outlined"
-          />
-          <Chip 
-            label={`Expiring Soon: ${passwordData.filter(p => p.status === 'expiring_soon').length}`} 
-            color="warning" 
-            variant="outlined"
-          />
-          <Chip 
-            label={`Normal: ${passwordData.filter(p => p.status === 'normal').length}`} 
-            color="success" 
-            variant="outlined"
-          />
-        </Box>
+        {!loading && !error && (
+          <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Chip 
+              label={`Total Users: ${passwordData.length}`} 
+              color="primary" 
+              variant="outlined"
+            />
+            <Chip 
+              label={`Expired: ${passwordData.filter(p => p.status === 'expired').length}`} 
+              color="error" 
+              variant="outlined"
+            />
+            <Chip 
+              label={`Expiring Soon: ${passwordData.filter(p => p.status === 'expiring_soon').length}`} 
+              color="warning" 
+              variant="outlined"
+            />
+            <Chip 
+              label={`Normal: ${passwordData.filter(p => p.status === 'normal').length}`} 
+              color="success" 
+              variant="outlined"
+            />
+          </Box>
+        )}
       </Container>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

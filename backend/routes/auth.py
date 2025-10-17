@@ -16,7 +16,7 @@ from models.auth import (
     RegistrationRequestUpdate, UserRegister, Profile, ProfileCreate,
     ApproveRegistrationRequest, RejectRegistrationRequest, SignupInvitation,
     SignupInvitationCreate, SecurityQuestion, UserSecurityAnswer, CompleteSignupRequest,
-    VerifyInvitationResponse
+    VerifyInvitationResponse, ChangePasswordRequest, ResetPasswordRequest
 )
 from services.supabase import get_supabase_service, get_supabase_client, set_current_user
 
@@ -534,6 +534,186 @@ async def forgot_password(email: str):
         logger.error(f"Forgot password error: {e}")
         return {"message": "If the email exists, a password reset link will be sent"}
 
+@router.post("/change-password")
+async def change_password(
+    change_request: ChangePasswordRequest,
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """Change user's password with password history tracking"""
+    try:
+        from services.password_service import get_password_service
+        
+        supabase = get_supabase_client()
+        password_service = get_password_service()
+        
+        # Validate new password format
+        if not validate_password(change_request.new_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 8 characters, start with a letter, and contain a letter, number, and special character"
+            )
+        
+        # Check if new password is same as current password
+        if change_request.current_password == change_request.new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be different from current password"
+            )
+        
+        # Verify current password by attempting to sign in
+        try:
+            # Get user's email from profile
+            service_client = get_supabase_service().get_service_client()
+            user_data = service_client.auth.admin.get_user_by_id(str(current_user.id))
+            
+            if not user_data or not user_data.user or not user_data.user.email:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to retrieve user information"
+                )
+            
+            user_email = user_data.user.email
+            
+            # Verify current password
+            auth_response = supabase.auth.sign_in_with_password({
+                "email": user_email,
+                "password": change_request.current_password
+            })
+            
+            if not auth_response.user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Current password is incorrect"
+                )
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Password verification error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect"
+            )
+        
+        # Check password history and validate (checks last 5 passwords by default)
+        success, error_msg = password_service.validate_and_store_password(
+            user_id=current_user.id,
+            new_password=change_request.new_password,
+            check_history=True,
+            history_limit=5
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg or "Password change failed"
+            )
+        
+        # Update password in Supabase Auth
+        try:
+            service_client.auth.admin.update_user_by_id(
+                str(current_user.id),
+                {"password": change_request.new_password}
+            )
+        except Exception as e:
+            logger.error(f"Password update error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update password"
+            )
+        
+        return {
+            "message": "Password changed successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Change password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while changing password"
+        )
+
+@router.post("/reset-password")
+async def reset_password(reset_request: ResetPasswordRequest):
+    """Reset password using reset token with password history tracking"""
+    try:
+        from services.password_service import get_password_service
+        
+        supabase = get_supabase_client()
+        password_service = get_password_service()
+        
+        # Validate new password format
+        if not validate_password(reset_request.new_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 8 characters, start with a letter, and contain a letter, number, and special character"
+            )
+        
+        # Verify and use the reset token to get user
+        try:
+            # Get user from reset token
+            user_response = supabase.auth.get_user(reset_request.token)
+            
+            if not user_response or not user_response.user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid or expired reset token"
+                )
+            
+            user_id = UUID(user_response.user.id)
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Token verification error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token"
+            )
+        
+        # Check password history and validate
+        success, error_msg = password_service.validate_and_store_password(
+            user_id=user_id,
+            new_password=reset_request.new_password,
+            check_history=True,
+            history_limit=5
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg or "Password reset failed"
+            )
+        
+        # Update password in Supabase Auth using service client
+        try:
+            service_client = get_supabase_service().get_service_client()
+            service_client.auth.admin.update_user_by_id(
+                str(user_id),
+                {"password": reset_request.new_password}
+            )
+        except Exception as e:
+            logger.error(f"Password update error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to reset password"
+            )
+        
+        return {
+            "message": "Password reset successfully. You can now sign in with your new password."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while resetting password"
+        )
+
 @router.get("/roles")
 async def get_roles(current_user: Profile = Depends(require_admin)):
     """Get all available roles (admin only)"""
@@ -613,8 +793,10 @@ async def complete_signup(signup_data: CompleteSignupRequest):
     try:
         import bcrypt
         from datetime import timezone
+        from services.password_service import get_password_service
         
         supabase = get_supabase_client()
+        password_service = get_password_service()
         
         # Verify the token
         invitation_response = supabase.from_("signupinvitations").select("*").eq("token", signup_data.token).execute()
@@ -686,6 +868,24 @@ async def complete_signup(signup_data: CompleteSignupRequest):
             )
         
         user_id = auth_response.user.id
+        
+        # Store password in history (new account, so no history check needed)
+        success, error_msg = password_service.validate_and_store_password(
+            user_id=UUID(user_id),
+            new_password=signup_data.password,
+            check_history=False  # First password, no history to check
+        )
+        
+        if not success:
+            # Rollback user creation if password storage fails
+            try:
+                service_client.auth.admin.delete_user(user_id)
+            except:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg or "Failed to store password"
+            )
         
         # Create user profile
         profile_data = {

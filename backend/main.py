@@ -10,7 +10,7 @@ import uvicorn
 from dotenv import load_dotenv
 import os
 
-from routes import auth, accounts, journal_entries, profiles
+from routes import auth, accounts, journal_entries, profiles, password_management
 
 # Load environment variables
 load_dotenv()
@@ -38,6 +38,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(accounts.router, prefix="/api/accounts", tags=["Chart of Accounts"])
 app.include_router(journal_entries.router, prefix="/api/journal-entries", tags=["Journal Entries"])
 app.include_router(profiles.router, prefix="/api/profiles", tags=["User Profiles"])
+app.include_router(password_management.router, prefix="/api/profiles", tags=["Password Management"])
 
 @app.get("/")
 async def root():

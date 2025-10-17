@@ -89,6 +89,14 @@ CREATE TABLE public.journalentrylines (
   CONSTRAINT journalentrylines_JournalEntryID_fkey FOREIGN KEY (JournalEntryID) REFERENCES public.journalentries(JournalEntryID),
   CONSTRAINT journalentrylines_AccountID_fkey FOREIGN KEY (AccountID) REFERENCES public.chartofaccounts(AccountID)
 );
+CREATE TABLE public.password_history (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id uuid NOT NULL,
+  password_hash text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT password_history_pkey PRIMARY KEY (id),
+  CONSTRAINT password_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
   Username text NOT NULL UNIQUE,

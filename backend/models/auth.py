@@ -170,3 +170,10 @@ class VerifyInvitationResponse(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     error: Optional[str] = None
+
+class PasswordHistory(BaseModelConfig):
+    """Password history model"""
+    id: Optional[int] = Field(None, description="Password history ID")
+    user_id: UUID = Field(..., alias="user_id", description="User UUID")
+    password_hash: str = Field(..., alias="password_hash")
+    created_at: datetime = Field(default_factory=datetime.utcnow, alias="created_at")

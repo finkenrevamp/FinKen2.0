@@ -1,6 +1,18 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.account_event_logs (
+  LogID bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  UserID uuid,
+  Timestamp timestamp with time zone NOT NULL DEFAULT now(),
+  ActionType text NOT NULL,
+  TableName text NOT NULL,
+  RecordID text,
+  BeforeValue jsonb,
+  AfterValue jsonb,
+  CONSTRAINT account_event_logs_pkey PRIMARY KEY (LogID),
+  CONSTRAINT account_event_logs_UserID_fkey FOREIGN KEY (UserID) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.accountledger (
   LedgerID bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   AccountID bigint NOT NULL,
@@ -39,7 +51,7 @@ CREATE TABLE public.errormessages (
   Severity text,
   CONSTRAINT errormessages_pkey PRIMARY KEY (ErrorID)
 );
-CREATE TABLE public.eventlogs (
+CREATE TABLE public.journal_event_logs (
   LogID bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   UserID uuid,
   Timestamp timestamp with time zone NOT NULL DEFAULT now(),
@@ -48,8 +60,8 @@ CREATE TABLE public.eventlogs (
   RecordID text,
   BeforeValue jsonb,
   AfterValue jsonb,
-  CONSTRAINT eventlogs_pkey PRIMARY KEY (LogID),
-  CONSTRAINT eventlogs_UserID_fkey FOREIGN KEY (UserID) REFERENCES public.profiles(id)
+  CONSTRAINT journal_event_logs_pkey PRIMARY KEY (LogID),
+  CONSTRAINT journal_event_logs_UserID_fkey FOREIGN KEY (UserID) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.journalattachments (
   AttachmentID bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -96,6 +108,17 @@ CREATE TABLE public.password_history (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT password_history_pkey PRIMARY KEY (id),
   CONSTRAINT password_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.password_reset_tokens (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id uuid NOT NULL,
+  email text NOT NULL,
+  token text NOT NULL UNIQUE,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT password_reset_tokens_pkey PRIMARY KEY (id),
+  CONSTRAINT password_reset_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -149,6 +172,18 @@ CREATE TABLE public.signupinvitations (
   CONSTRAINT signupinvitations_pkey PRIMARY KEY (invitationid),
   CONSTRAINT signupinvitations_requestid_fkey FOREIGN KEY (requestid) REFERENCES public.registrationrequests(RequestID),
   CONSTRAINT signupinvitations_approveduserrole_fkey FOREIGN KEY (approveduserrole) REFERENCES public.roles(RoleID)
+);
+CREATE TABLE public.users_event_logs (
+  LogID bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  UserID uuid,
+  Timestamp timestamp with time zone NOT NULL DEFAULT now(),
+  ActionType text NOT NULL,
+  TableName text NOT NULL,
+  RecordID text,
+  BeforeValue jsonb,
+  AfterValue jsonb,
+  CONSTRAINT users_event_logs_pkey PRIMARY KEY (LogID),
+  CONSTRAINT eventlogs_UserID_fkey FOREIGN KEY (UserID) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.usersecurityanswers (
   useranswerid bigint GENERATED ALWAYS AS IDENTITY NOT NULL,

@@ -398,3 +398,92 @@ FinKen 2.0 Team
         body=body,
         html_body=html_body
     )
+
+
+def send_signup_invitation_email(
+    admin_email: str,
+    admin_name: str,
+    user_email: str,
+    user_name: str,
+    signup_url: str,
+    role_name: str
+) -> dict:
+    """
+    Send signup invitation email with link to complete registration
+    
+    Args:
+        admin_email: Email of the admin who approved the registration
+        admin_name: Name of the admin
+        user_email: Email of the new user
+        user_name: Name of the new user
+        signup_url: URL to complete signup
+        role_name: Assigned role name
+        
+    Returns:
+        dict: Response from email service
+    """
+    subject = "FinKen 2.0 - Complete Your Account Setup"
+    
+    body = f"""Dear {user_name},
+
+Your registration request for FinKen 2.0 has been approved!
+
+You have been assigned the role of {role_name}.
+
+To complete your account setup, please click the link below:
+{signup_url}
+
+You will need to:
+1. Set your password
+2. Choose a security question and provide an answer
+
+This link will expire in 7 days. If you have any questions, please reply to this email.
+
+Best regards,
+FinKen 2.0 Team
+"""
+    
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #1976d2;">Welcome to FinKen 2.0!</h2>
+            <p>Dear {user_name},</p>
+            <p>Your registration request for FinKen 2.0 has been approved!</p>
+            
+            <div style="background-color: #e3f2fd; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <p><strong>Assigned Role:</strong> {role_name}</p>
+            </div>
+            
+            <p>To complete your account setup, please click the button below:</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{signup_url}" style="background-color: #1976d2; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Complete Account Setup</a>
+            </div>
+            
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="background-color: #f5f5f5; padding: 10px; word-break: break-all;">{signup_url}</p>
+            
+            <p><strong>You will need to:</strong></p>
+            <ol>
+                <li>Set your password</li>
+                <li>Choose a security question and provide an answer</li>
+            </ol>
+            
+            <p style="color: #ff9800;"><strong>Note:</strong> This link will expire in 7 days.</p>
+            
+            <p>If you have any questions, please reply to this email.</p>
+            
+            <p>Best regards,<br>FinKen 2.0 Team</p>
+        </body>
+    </html>
+    """
+    
+    return send_email(
+        sender_email=admin_email,
+        sender_name=admin_name,
+        receiver_email=user_email,
+        receiver_name=user_name,
+        subject=subject,
+        body=body,
+        html_body=html_body
+    )

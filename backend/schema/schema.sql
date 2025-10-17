@@ -99,6 +99,7 @@ CREATE TABLE public.profiles (
   IsActive boolean NOT NULL DEFAULT true,
   DateCreated timestamp with time zone NOT NULL DEFAULT now(),
   DOB date,
+  Address text,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
   CONSTRAINT profiles_RoleID_fkey FOREIGN KEY (RoleID) REFERENCES public.roles(RoleID)
@@ -121,4 +122,29 @@ CREATE TABLE public.roles (
   RoleID bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   RoleName text NOT NULL UNIQUE,
   CONSTRAINT roles_pkey PRIMARY KEY (RoleID)
+);
+CREATE TABLE public.securityquestions (
+  questionid bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  questiontext text NOT NULL UNIQUE,
+  CONSTRAINT securityquestions_pkey PRIMARY KEY (questionid)
+);
+CREATE TABLE public.signupinvitations (
+  invitationid bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  requestid bigint NOT NULL,
+  token text NOT NULL UNIQUE,
+  expiresat timestamp with time zone NOT NULL,
+  usedat timestamp with time zone,
+  approveduserrole bigint,
+  CONSTRAINT signupinvitations_pkey PRIMARY KEY (invitationid),
+  CONSTRAINT signupinvitations_requestid_fkey FOREIGN KEY (requestid) REFERENCES public.registrationrequests(RequestID),
+  CONSTRAINT signupinvitations_approveduserrole_fkey FOREIGN KEY (approveduserrole) REFERENCES public.roles(RoleID)
+);
+CREATE TABLE public.usersecurityanswers (
+  useranswerid bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  userid uuid NOT NULL,
+  questionid bigint NOT NULL,
+  answerhash text NOT NULL,
+  CONSTRAINT usersecurityanswers_pkey PRIMARY KEY (useranswerid),
+  CONSTRAINT usersecurityanswers_userid_fkey FOREIGN KEY (userid) REFERENCES public.profiles(id),
+  CONSTRAINT usersecurityanswers_questionid_fkey FOREIGN KEY (questionid) REFERENCES public.securityquestions(questionid)
 );

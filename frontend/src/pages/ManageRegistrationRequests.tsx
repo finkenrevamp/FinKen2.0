@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -27,7 +27,6 @@ import type {
 import {
   CheckCircle,
   Cancel,
-  Visibility,
 } from '@mui/icons-material';
 import Header from '../components/Header';
 import type { User } from '../types/auth';
@@ -48,10 +47,6 @@ interface RejectionDialogData {
   name: string;
 }
 
-interface ViewDialogData {
-  request: RegistrationRequestData;
-}
-
 const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({ user, onLogout }) => {
   const [requests, setRequests] = useState<RegistrationRequestData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +56,6 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
   // Approval dialog state
   const [approvalDialog, setApprovalDialog] = useState<ApprovalDialogData | null>(null);
   const [approvalRoleId, setApprovalRoleId] = useState<number>(3); // Default to Accountant
-  const [approvalPassword, setApprovalPassword] = useState('');
   const [approvalLoading, setApprovalLoading] = useState(false);
   
   // Rejection dialog state
@@ -69,8 +63,7 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectionLoading, setRejectionLoading] = useState(false);
   
-  // View dialog state
-  const [viewDialog, setViewDialog] = useState<ViewDialogData | null>(null);
+
 
   // Fetch registration requests on mount
   useEffect(() => {
@@ -104,17 +97,21 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
     }
   };
 
-  const handleApprove = (requestId: string) => {
+  const handleApprove = useCallback((requestId: string) => {
+    console.log('handleApprove called with requestId:', requestId);
     const request = requests.find(r => r.requestId === requestId);
+    console.log('Found request:', request);
     if (request) {
       setApprovalDialog({ requestId, name: request.name });
       setApprovalRoleId(3); // Default to Accountant
-      setApprovalPassword('');
+      console.log('Approval dialog set');
+    } else {
+      console.error('Request not found for requestId:', requestId);
     }
-  };
+  }, [requests]);
 
   const handleApproveConfirm = async () => {
-    if (!approvalDialog || !approvalPassword) {
+    if (!approvalDialog) {
       return;
     }
 
@@ -125,13 +122,11 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
       const requestIdNum = parseInt(approvalDialog.requestId.replace('REQ', ''));
       const response = await authService.approveRegistrationRequest(
         requestIdNum,
-        approvalRoleId,
-        approvalPassword
+        approvalRoleId
       );
       
-      setSuccessMessage(response.message || 'Registration request approved successfully');
+      setSuccessMessage(response.message || 'Registration request approved successfully. User will receive an email with setup instructions.');
       setApprovalDialog(null);
-      setApprovalPassword('');
       
       // Refresh the list
       await fetchRegistrationRequests();
@@ -143,13 +138,18 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
     }
   };
 
-  const handleReject = (requestId: string) => {
+  const handleReject = useCallback((requestId: string) => {
+    console.log('handleReject called with requestId:', requestId);
     const request = requests.find(r => r.requestId === requestId);
+    console.log('Found request:', request);
     if (request) {
       setRejectionDialog({ requestId, name: request.name });
       setRejectionReason('');
+      console.log('Rejection dialog set');
+    } else {
+      console.error('Request not found for requestId:', requestId);
     }
-  };
+  }, [requests]);
 
   const handleRejectConfirm = async () => {
     if (!rejectionDialog || !rejectionReason) {
@@ -180,13 +180,6 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
     }
   };
 
-  const handleView = (requestId: string) => {
-    const request = requests.find(r => r.requestId === requestId);
-    if (request) {
-      setViewDialog({ request });
-    }
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
@@ -199,6 +192,12 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
         return 'default';
     }
   };
+
+  // Debug: Log requests data
+  useEffect(() => {
+    console.log('Registration requests data:', requests);
+    console.log('Pending requests:', requests.filter(r => r.status === 'pending'));
+  }, [requests]);
 
   const columns: GridColDef[] = useMemo(() => [
     {
@@ -292,28 +291,20 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
       disableExport: true,
       renderCell: (params: GridRenderCellParams) => {
         const requestData = params.row as RegistrationRequestData;
+        console.log('Action cell render - RequestID:', requestData.requestId, 'Status:', requestData.status);
         
         return (
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Tooltip title="View Details">
-              <IconButton
-                size="small"
-                onClick={() => handleView(requestData.requestId)}
-                sx={{ 
-                  color: 'info.main',
-                  '&:hover': { backgroundColor: 'info.light', color: 'white' }
-                }}
-              >
-                <Visibility fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', height: '100%' }}>
             {requestData.status === 'pending' && (
               <>
                 <Tooltip title="Approve Request">
                   <IconButton
                     size="small"
-                    onClick={() => handleApprove(requestData.requestId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('Approve clicked for:', requestData.requestId);
+                      handleApprove(requestData.requestId);
+                    }}
                     sx={{ 
                       color: 'success.main',
                       '&:hover': { backgroundColor: 'success.light', color: 'white' }
@@ -326,7 +317,11 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
                 <Tooltip title="Reject Request">
                   <IconButton
                     size="small"
-                    onClick={() => handleReject(requestData.requestId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('Reject clicked for:', requestData.requestId);
+                      handleReject(requestData.requestId);
+                    }}
                     sx={{ 
                       color: 'error.main',
                       '&:hover': { backgroundColor: 'error.light', color: 'white' }
@@ -341,7 +336,7 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
         );
       },
     },
-  ], []);
+  ], [handleApprove, handleReject]); // Add dependencies
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: 'background.default', minHeight: '100vh', width: '100%' }}>
@@ -462,27 +457,21 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
             Approve registration request for <strong>{approvalDialog?.name}</strong>?
           </Typography>
           
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            The user will receive an email with a link to complete their account setup, including setting their password and security question.
+          </Typography>
+          
           <TextField
             select
             fullWidth
             label="Role"
             value={approvalRoleId}
             onChange={(e) => setApprovalRoleId(Number(e.target.value))}
-            sx={{ mb: 2 }}
           >
             <MenuItem value={1}>Administrator</MenuItem>
             <MenuItem value={2}>Manager</MenuItem>
             <MenuItem value={3}>Accountant</MenuItem>
           </TextField>
-
-          <TextField
-            fullWidth
-            label="Temporary Password"
-            type="password"
-            value={approvalPassword}
-            onChange={(e) => setApprovalPassword(e.target.value)}
-            helperText="Password must be at least 8 characters, start with a letter, and contain a letter, number, and special character"
-          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setApprovalDialog(null)} disabled={approvalLoading}>
@@ -492,7 +481,7 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
             onClick={handleApproveConfirm} 
             variant="contained" 
             color="success"
-            disabled={approvalLoading || !approvalPassword}
+            disabled={approvalLoading}
           >
             {approvalLoading ? <CircularProgress size={24} /> : 'Approve'}
           </Button>
@@ -529,73 +518,6 @@ const ManageRegistrationRequests: React.FC<ManageRegistrationRequestsProps> = ({
           >
             {rejectionLoading ? <CircularProgress size={24} /> : 'Reject'}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* View Details Dialog */}
-      <Dialog open={!!viewDialog} onClose={() => setViewDialog(null)} maxWidth="md" fullWidth>
-        <DialogTitle>Registration Request Details</DialogTitle>
-        <DialogContent>
-          {viewDialog && (
-            <Box sx={{ pt: 2 }}>
-              <Typography variant="subtitle2" color="text.secondary">Request ID</Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.requestId}</Typography>
-
-              <Typography variant="subtitle2" color="text.secondary">Name</Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.name}</Typography>
-
-              <Typography variant="subtitle2" color="text.secondary">Email</Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.email}</Typography>
-
-              {viewDialog.request.dateOfBirth && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary">Date of Birth</Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    {new Date(viewDialog.request.dateOfBirth).toLocaleDateString()}
-                  </Typography>
-                </>
-              )}
-
-              {viewDialog.request.address && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary">Address</Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.address}</Typography>
-                </>
-              )}
-
-              <Typography variant="subtitle2" color="text.secondary">Request Date</Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                {new Date(viewDialog.request.requestDate).toLocaleDateString()}
-              </Typography>
-
-              <Typography variant="subtitle2" color="text.secondary">Status</Typography>
-              <Chip
-                label={viewDialog.request.status.charAt(0).toUpperCase() + viewDialog.request.status.slice(1)}
-                color={getStatusColor(viewDialog.request.status) as any}
-                size="small"
-                sx={{ mb: 2 }}
-              />
-
-              {viewDialog.request.reviewedBy && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>Reviewed By</Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>{viewDialog.request.reviewedBy}</Typography>
-                </>
-              )}
-
-              {viewDialog.request.reviewDate && (
-                <>
-                  <Typography variant="subtitle2" color="text.secondary">Review Date</Typography>
-                  <Typography variant="body1">
-                    {new Date(viewDialog.request.reviewDate).toLocaleDateString()}
-                  </Typography>
-                </>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setViewDialog(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

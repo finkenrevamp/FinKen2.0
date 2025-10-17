@@ -3,7 +3,7 @@ Authentication routes for FinKen 2.0
 Handles user sign-in, registration requests, and admin user management
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 from uuid import UUID
@@ -14,7 +14,9 @@ import re
 from models.auth import (
     UserLogin, TokenResponse, RegistrationRequestCreate, RegistrationRequest,
     RegistrationRequestUpdate, UserRegister, Profile, ProfileCreate,
-    ApproveRegistrationRequest, RejectRegistrationRequest
+    ApproveRegistrationRequest, RejectRegistrationRequest, SignupInvitation,
+    SignupInvitationCreate, SecurityQuestion, UserSecurityAnswer, CompleteSignupRequest,
+    VerifyInvitationResponse
 )
 from services.supabase import get_supabase_service, get_supabase_client, set_current_user
 
@@ -270,17 +272,13 @@ async def approve_registration_request(
     current_user: Profile = Depends(require_admin)
 ):
     """
-    Approve registration request and create user account (admin only)
+    Approve registration request and send signup invitation (admin only)
     """
     try:
-        supabase = get_supabase_client()
+        import secrets
+        from datetime import timedelta
         
-        # Validate password
-        if not validate_password(approval_data.password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password must be at least 8 characters, start with a letter, and contain a letter, number, and special character"
-            )
+        supabase = get_supabase_client()
         
         # Get the registration request
         request_response = supabase.from_("registrationrequests").select("*").eq("RequestID", request_id).single().execute()
@@ -307,52 +305,64 @@ async def approve_registration_request(
                 detail="Invalid role ID"
             )
         
-        # Generate username
-        username = generate_username(reg_request.first_name, reg_request.last_name)
+        # Generate a secure token for signup invitation
+        invitation_token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(days=7)  # Token expires in 7 days
         
-        # Create user in Supabase Auth
-        service_client = get_supabase_service().get_service_client()
-        
-        auth_response = service_client.auth.admin.create_user({
-            "email": reg_request.email,
-            "password": approval_data.password,
-            "email_confirm": True
-        })
-        
-        if not auth_response.user:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user account"
-            )
-        
-        user_id = auth_response.user.id
-        
-        # Create user profile
-        profile_data = {
-            "id": user_id,
-            "Username": username,
-            "FirstName": reg_request.first_name,
-            "LastName": reg_request.last_name,
-            "DOB": reg_request.dob.isoformat() if reg_request.dob else None,
-            "Address": reg_request.address,
-            "RoleID": approval_data.role_id
+        # Create signup invitation with the approved role
+        invitation_data = {
+            "requestid": request_id,
+            "token": invitation_token,
+            "expiresat": expires_at.isoformat(),
+            "approveduserrole": approval_data.role_id
         }
         
-        profile_result = supabase.from_("profiles").insert(profile_data).execute()
+        invitation_result = supabase.from_("signupinvitations").insert(invitation_data).execute()
         
         # Update registration request status
         update_data = {
             "Status": "Approved",
-            "ReviewedByUserID": current_user.id,
+            "ReviewedByUserID": str(current_user.id),
             "ReviewDate": datetime.utcnow().isoformat()
         }
         
         supabase.from_("registrationrequests").update(update_data).eq("RequestID", request_id).execute()
         
+        # Import email service
+        from services.emailUserFunction import send_signup_invitation_email
+        from services.supabase import get_supabase_service
+        
+        # Generate signup URL
+        frontend_url = "http://localhost:5173"  # TODO: Make this configurable
+        signup_url = f"{frontend_url}/finish-signup?token={invitation_token}"
+        
+        # Get admin's email from Supabase auth using service client
+        admin_email = "admin@finken.com"  # Default fallback
+        try:
+            service_client = get_supabase_service().get_service_client()
+            admin_user_response = service_client.auth.admin.get_user_by_id(str(current_user.id))
+            if admin_user_response and admin_user_response.user and admin_user_response.user.email:
+                admin_email = admin_user_response.user.email
+        except Exception as e:
+            logger.warning(f"Could not fetch admin email: {e}")
+        
+        # Send invitation email
+        try:
+            send_signup_invitation_email(
+                admin_email=admin_email,
+                admin_name=f"{current_user.first_name} {current_user.last_name}",
+                user_email=reg_request.email,
+                user_name=f"{reg_request.first_name} {reg_request.last_name}",
+                signup_url=signup_url,
+                role_name=role_response.data["RoleName"]
+            )
+        except Exception as email_error:
+            logger.error(f"Failed to send invitation email: {email_error}")
+            # Don't fail the whole operation if email fails
+        
         return {
-            "message": "Registration request approved and user account created successfully",
-            "username": username,
-            "user_id": user_id
+            "message": "Registration request approved. User will receive an email with setup instructions.",
+            "token": invitation_token
         }
         
     except HTTPException:
@@ -396,7 +406,7 @@ async def reject_registration_request(
         # Update registration request status
         update_data = {
             "Status": f"Rejected: {rejection_data.reason}",
-            "ReviewedByUserID": current_user.id,
+            "ReviewedByUserID": str(current_user.id),
             "ReviewDate": datetime.utcnow().isoformat()
         }
         
@@ -459,4 +469,189 @@ async def get_roles(current_user: Profile = Depends(require_admin)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching roles"
+        )
+
+@router.get("/security-questions", response_model=List[SecurityQuestion])
+async def get_security_questions():
+    """Get all security questions (public endpoint for signup)"""
+    try:
+        supabase = get_supabase_client()
+        result = supabase.from_("securityquestions").select("*").execute()
+        return [SecurityQuestion(**item) for item in result.data]
+    except Exception as e:
+        logger.error(f"Get security questions error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while fetching security questions"
+        )
+
+@router.post("/verify-invitation", response_model=VerifyInvitationResponse)
+async def verify_invitation_token(token: str = Query(..., description="Invitation token")):
+    """Verify signup invitation token and return associated registration request data"""
+    try:
+        from datetime import timezone
+        
+        supabase = get_supabase_client()
+        
+        # Get invitation by token
+        invitation_response = supabase.from_("signupinvitations").select("*").eq("token", token).execute()
+        
+        if not invitation_response.data or len(invitation_response.data) == 0:
+            return VerifyInvitationResponse(valid=False, error="Invalid invitation token")
+        
+        invitation = SignupInvitation(**invitation_response.data[0])
+        
+        # Check if token is expired (use timezone-aware datetime)
+        current_time = datetime.now(timezone.utc)
+        if invitation.expires_at < current_time:
+            return VerifyInvitationResponse(valid=False, error="Invitation token has expired")
+        
+        # Check if token has already been used
+        if invitation.used_at:
+            return VerifyInvitationResponse(valid=False, error="Invitation token has already been used")
+        
+        # Get associated registration request
+        request_response = supabase.from_("registrationrequests").select("*").eq("RequestID", invitation.request_id).single().execute()
+        
+        if not request_response.data:
+            return VerifyInvitationResponse(valid=False, error="Associated registration request not found")
+        
+        reg_request = RegistrationRequest(**request_response.data)
+        
+        return VerifyInvitationResponse(
+            valid=True,
+            request_id=reg_request.request_id,
+            first_name=reg_request.first_name,
+            last_name=reg_request.last_name,
+            email=reg_request.email
+        )
+        
+    except Exception as e:
+        logger.error(f"Verify invitation error: {e}")
+        return VerifyInvitationResponse(valid=False, error="An error occurred while verifying invitation")
+
+@router.post("/complete-signup")
+async def complete_signup(signup_data: CompleteSignupRequest):
+    """Complete user signup after invitation approval"""
+    try:
+        import bcrypt
+        from datetime import timezone
+        
+        supabase = get_supabase_client()
+        
+        # Verify the token
+        invitation_response = supabase.from_("signupinvitations").select("*").eq("token", signup_data.token).execute()
+        
+        if not invitation_response.data or len(invitation_response.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid invitation token"
+            )
+        
+        invitation = SignupInvitation(**invitation_response.data[0])
+        
+        # Check if token is expired (use timezone-aware datetime)
+        current_time = datetime.now(timezone.utc)
+        if invitation.expires_at < current_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invitation token has expired"
+            )
+        
+        # Check if token has already been used
+        if invitation.used_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invitation token has already been used"
+            )
+        
+        # Validate password
+        if not validate_password(signup_data.password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 8 characters, start with a letter, and contain a letter, number, and special character"
+            )
+        
+        # Get registration request
+        request_response = supabase.from_("registrationrequests").select("*").eq("RequestID", invitation.request_id).single().execute()
+        
+        if not request_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Registration request not found"
+            )
+        
+        reg_request = RegistrationRequest(**request_response.data)
+        
+        # Get role ID from the invitation (stored during approval process)
+        role_id = invitation.approved_user_role
+        if not role_id:
+            # Fallback to Accountant if role_id is not set (shouldn't happen in normal flow)
+            logger.warning(f"No role found in invitation {invitation.invitation_id}, defaulting to Accountant")
+            role_id = 3
+        
+        # Generate username
+        username = generate_username(reg_request.first_name, reg_request.last_name)
+        
+        # Create user in Supabase Auth
+        service_client = get_supabase_service().get_service_client()
+        
+        auth_response = service_client.auth.admin.create_user({
+            "email": reg_request.email,
+            "password": signup_data.password,
+            "email_confirm": True
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user account"
+            )
+        
+        user_id = auth_response.user.id
+        
+        # Create user profile
+        profile_data = {
+            "id": user_id,
+            "Username": username,
+            "FirstName": reg_request.first_name,
+            "LastName": reg_request.last_name,
+            "DOB": reg_request.dob.isoformat() if reg_request.dob else None,
+            "Address": reg_request.address,
+            "RoleID": role_id
+        }
+        
+        supabase.from_("profiles").insert(profile_data).execute()
+        
+        # Hash the security answer
+        answer_bytes = signup_data.security_answer.encode('utf-8')
+        salt = bcrypt.gensalt()
+        answer_hash = bcrypt.hashpw(answer_bytes, salt).decode('utf-8')
+        
+        # Save security answer
+        security_answer_data = {
+            "userid": user_id,
+            "questionid": signup_data.security_question_id,
+            "answerhash": answer_hash
+        }
+        
+        supabase.from_("usersecurityanswers").insert(security_answer_data).execute()
+        
+        # Mark invitation as used
+        supabase.from_("signupinvitations").update({
+            "usedat": datetime.utcnow().isoformat()
+        }).eq("token", signup_data.token).execute()
+        
+        return {
+            "message": "Account setup completed successfully. You can now sign in.",
+            "username": username
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Complete signup error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while completing signup"
         )

@@ -83,11 +83,36 @@ export interface RegistrationRequestData {
 
 interface ApproveRequestPayload {
   role_id: number;
-  password: string;
 }
 
 interface RejectRequestPayload {
   reason: string;
+}
+
+export interface SecurityQuestion {
+  questionid: number;
+  questiontext: string;
+}
+
+export interface VerifyInvitationResponse {
+  valid: boolean;
+  request_id?: number;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  error?: string;
+}
+
+interface CompleteSignupPayload {
+  token: string;
+  password: string;
+  security_question_id: number;
+  security_answer: string;
+}
+
+interface CompleteSignupResponse {
+  message: string;
+  username: string;
 }
 
 /**
@@ -294,20 +319,33 @@ class AuthService {
       console.log('Registration requests response:', response);
       
       // Transform backend data to frontend format
-      return response.data.map((req) => ({
-        id: req.RequestID.toString(),
-        requestId: `REQ${req.RequestID.toString().padStart(3, '0')}`,
-        name: `${req.FirstName} ${req.LastName}`,
-        firstName: req.FirstName,
-        lastName: req.LastName,
-        email: req.Email,
-        dateOfBirth: req.DOB,
-        address: req.Address,
-        requestDate: req.RequestDate,
-        status: req.Status.toLowerCase() as 'pending' | 'approved' | 'rejected',
-        reviewedBy: req.ReviewedByUserID,
-        reviewDate: req.ReviewDate,
-      }));
+      return response.data.map((req) => {
+        // Parse status - backend may return "Rejected: reason" format
+        let status: 'pending' | 'approved' | 'rejected' = 'pending';
+        const statusLower = req.Status.toLowerCase();
+        if (statusLower === 'approved') {
+          status = 'approved';
+        } else if (statusLower.startsWith('rejected')) {
+          status = 'rejected';
+        } else if (statusLower === 'pending') {
+          status = 'pending';
+        }
+        
+        return {
+          id: req.RequestID.toString(),
+          requestId: `REQ${req.RequestID.toString().padStart(3, '0')}`,
+          name: `${req.FirstName} ${req.LastName}`,
+          firstName: req.FirstName,
+          lastName: req.LastName,
+          email: req.Email,
+          dateOfBirth: req.DOB,
+          address: req.Address,
+          requestDate: req.RequestDate,
+          status,
+          reviewedBy: req.ReviewedByUserID,
+          reviewDate: req.ReviewDate,
+        };
+      });
     } catch (error) {
       console.error('Get registration requests error:', error);
       if (error instanceof Error) {
@@ -322,16 +360,14 @@ class AuthService {
    */
   async approveRegistrationRequest(
     requestId: number,
-    roleId: number,
-    password: string
-  ): Promise<{ message: string; username: string; user_id: string }> {
+    roleId: number
+  ): Promise<{ message: string; token: string }> {
     try {
       const payload: ApproveRequestPayload = {
         role_id: roleId,
-        password: password,
       };
 
-      const response = await apiClient.post<{ message: string; username: string; user_id: string }>(
+      const response = await apiClient.post<{ message: string; token: string }>(
         `/auth/approve-registration/${requestId}`,
         payload
       );
@@ -368,6 +404,79 @@ class AuthService {
         throw new Error(error.message);
       }
       throw new Error('An unexpected error occurred while rejecting registration request');
+    }
+  }
+
+  /**
+   * Get all security questions (public endpoint)
+   */
+  async getSecurityQuestions(): Promise<SecurityQuestion[]> {
+    try {
+      const response = await apiClient.get<SecurityQuestion[]>(
+        '/auth/security-questions',
+        { requiresAuth: false }
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while fetching security questions');
+    }
+  }
+
+  /**
+   * Verify signup invitation token
+   */
+  async verifyInvitationToken(token: string): Promise<VerifyInvitationResponse> {
+    try {
+      const response = await apiClient.post<VerifyInvitationResponse>(
+        `/auth/verify-invitation?token=${encodeURIComponent(token)}`,
+        null,
+        {
+          requiresAuth: false
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while verifying invitation token');
+    }
+  }
+
+  /**
+   * Complete signup with password and security question
+   */
+  async completeSignup(
+    token: string,
+    password: string,
+    securityQuestionId: number,
+    securityAnswer: string
+  ): Promise<CompleteSignupResponse> {
+    try {
+      const payload: CompleteSignupPayload = {
+        token,
+        password,
+        security_question_id: securityQuestionId,
+        security_answer: securityAnswer,
+      };
+
+      const response = await apiClient.post<CompleteSignupResponse>(
+        '/auth/complete-signup',
+        payload,
+        { requiresAuth: false }
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unexpected error occurred while completing signup');
     }
   }
 }

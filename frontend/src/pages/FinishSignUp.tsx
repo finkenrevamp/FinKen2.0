@@ -10,67 +10,83 @@ import {
   Alert,
   InputAdornment,
   IconButton,
+  MenuItem,
+  CircularProgress,
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
-  Person,
   Lock,
   CheckCircle,
+  HelpOutline,
 } from '@mui/icons-material';
-import type { FinishSignUpData } from '../types/auth';
+import { authService, type SecurityQuestion, type VerifyInvitationResponse } from '../services/authService';
 import AuthHeader from '../components/AuthHeader';
+
+interface FormData {
+  password: string;
+  confirmPassword: string;
+  securityQuestionId: number | '';
+  securityAnswer: string;
+}
 
 const FinishSignUp: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [formData, setFormData] = useState<FinishSignUpData>({
-    username: '',
+  const [formData, setFormData] = useState<FormData>({
     password: '',
     confirmPassword: '',
-    token: '',
+    securityQuestionId: '',
+    securityAnswer: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [userInfo, setUserInfo] = useState<{
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null>(null);
+  const [isVerifying, setIsVerifying] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [userInfo, setUserInfo] = useState<VerifyInvitationResponse | null>(null);
+  const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestion[]>([]);
 
   useEffect(() => {
-    // Get token from URL parameters
-    const token = searchParams.get('token');
-    if (token) {
-      setFormData(prev => ({ ...prev, token }));
-      // TODO: Implement API call to verify token and get user info
-      // Mock user info for now
-      setUserInfo({
-        firstName: 'John',
-        lastName: 'Doe',
-        email: 'john.doe@example.com',
-      });
+    // Get token from URL parameters and verify it
+    const tokenParam = searchParams.get('token');
+    if (tokenParam) {
+      setToken(tokenParam);
+      verifyToken(tokenParam);
+      loadSecurityQuestions();
     } else {
       setError('Invalid or missing token. Please check your email link.');
+      setIsVerifying(false);
     }
   }, [searchParams]);
 
-  const generateUsername = (firstName: string, lastName: string): string => {
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = String(now.getFullYear()).slice(-2);
-    return `${firstName.charAt(0).toLowerCase()}${lastName.toLowerCase()}${month}${year}`;
+  const verifyToken = async (tokenToVerify: string) => {
+    try {
+      const response = await authService.verifyInvitationToken(tokenToVerify);
+      
+      if (response.valid) {
+        setUserInfo(response);
+      } else {
+        setError(response.error || 'Invalid or expired invitation token.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to verify invitation token.');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
-  useEffect(() => {
-    if (userInfo) {
-      const generatedUsername = generateUsername(userInfo.firstName, userInfo.lastName);
-      setFormData(prev => ({ ...prev, username: generatedUsername }));
+  const loadSecurityQuestions = async () => {
+    try {
+      const questions = await authService.getSecurityQuestions();
+      setSecurityQuestions(questions);
+    } catch (err) {
+      console.error('Failed to load security questions:', err);
+      // Don't set error here as token verification is more critical
     }
-  }, [userInfo]);
+  };
 
   const validatePassword = (password: string): string | null => {
     if (password.length < 8) {
@@ -121,12 +137,34 @@ const FinishSignUp: React.FC = () => {
       return;
     }
 
+    // Validate security question and answer
+    if (!formData.securityQuestionId) {
+      setError('Please select a security question.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!formData.securityAnswer || formData.securityAnswer.trim().length < 2) {
+      setError('Please provide a valid answer to the security question.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // TODO: Implement actual API call to complete registration
-      console.log('Completing registration:', formData);
+      if (!token) {
+        setError('Invalid token.');
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await authService.completeSignup(
+        token,
+        formData.password,
+        Number(formData.securityQuestionId),
+        formData.securityAnswer
+      );
       
-      // Mock successful registration
-      setSuccess('Account setup completed successfully! You can now sign in with your credentials.');
+      setSuccess(`Account setup completed successfully! Your username is ${response.username}. Redirecting to sign in...`);
       
       // Redirect to sign in after a delay
       setTimeout(() => {
@@ -134,13 +172,56 @@ const FinishSignUp: React.FC = () => {
       }, 3000);
       
     } catch (err) {
-      setError('An error occurred while setting up your account. Please try again.');
+      setError(err instanceof Error ? err.message : 'An error occurred while setting up your account. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!formData.token) {
+  if (isVerifying) {
+    return (
+      <>
+        <AuthHeader />
+        <Box
+          sx={{
+            minHeight: '100vh',
+            width: '100vw',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, #001f3f 0%, #003366 25%, #004080 50%, #0066cc 75%, #1a8cff 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Container component="main" maxWidth="sm" sx={{ position: 'relative', zIndex: 10 }}>
+            <Paper 
+              elevation={8} 
+              sx={{ 
+                padding: 4, 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: 3,
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                textAlign: 'center',
+              }}
+            >
+              <CircularProgress size={60} />
+              <Typography variant="h6" sx={{ mt: 2 }}>
+                Verifying invitation...
+              </Typography>
+            </Paper>
+          </Container>
+        </Box>
+      </>
+    );
+  }
+
+  if (!token || (userInfo && !userInfo.valid)) {
     return (
       <>
         <AuthHeader />
@@ -291,7 +372,7 @@ const FinishSignUp: React.FC = () => {
           {userInfo && (
             <Alert severity="info" sx={{ mb: 3 }}>
               <Typography variant="body2">
-                Welcome, {userInfo.firstName} {userInfo.lastName}!<br />
+                Welcome, {userInfo.first_name} {userInfo.last_name}!<br />
                 Your registration has been approved. Please set up your login credentials below.
               </Typography>
             </Alert>
@@ -314,27 +395,6 @@ const FinishSignUp: React.FC = () => {
 
           {!success && (
             <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                id="username"
-                label="Username"
-                name="username"
-                autoComplete="username"
-                value={formData.username}
-                onChange={handleInputChange}
-                disabled
-                helperText="Username is automatically generated based on your name and registration date"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Person />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
               <TextField
                 margin="normal"
                 required
@@ -403,6 +463,47 @@ const FinishSignUp: React.FC = () => {
                 <br />• Must start with a letter
                 <br />• Must contain at least one letter, one number, and one special character
               </Typography>
+
+              <TextField
+                select
+                margin="normal"
+                required
+                fullWidth
+                name="securityQuestionId"
+                label="Security Question"
+                id="securityQuestionId"
+                value={formData.securityQuestionId}
+                onChange={handleInputChange}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <HelpOutline />
+                    </InputAdornment>
+                  ),
+                }}
+              >
+                <MenuItem value="">
+                  <em>Select a security question</em>
+                </MenuItem>
+                {securityQuestions.map((question) => (
+                  <MenuItem key={question.questionid} value={question.questionid}>
+                    {question.questiontext}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="securityAnswer"
+                label="Security Answer"
+                type="text"
+                id="securityAnswer"
+                value={formData.securityAnswer}
+                onChange={handleInputChange}
+                helperText="This answer will be used to verify your identity if you forget your password"
+              />
 
               <Button
                 type="submit"

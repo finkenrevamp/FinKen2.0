@@ -121,8 +121,50 @@ class ChangePasswordRequest(BaseModel):
 class ApproveRegistrationRequest(BaseModel):
     """Approve registration request model"""
     role_id: int
-    password: str = Field(..., min_length=8)
 
 class RejectRegistrationRequest(BaseModel):
     """Reject registration request model"""
     reason: str = Field(..., max_length=500)
+
+class SignupInvitation(BaseModelConfig):
+    """Signup invitation model"""
+    invitation_id: Optional[int] = Field(None, alias="invitationid")
+    request_id: int = Field(..., alias="requestid")
+    token: str = Field(..., alias="token")
+    expires_at: datetime = Field(..., alias="expiresat")
+    used_at: Optional[datetime] = Field(None, alias="usedat")
+    approved_user_role: Optional[int] = Field(None, alias="approveduserrole")
+
+class SignupInvitationCreate(BaseModel):
+    """Signup invitation creation model"""
+    request_id: int
+    token: str
+    expires_at: datetime
+
+class SecurityQuestion(BaseModelConfig):
+    """Security question model"""
+    question_id: Optional[int] = Field(None, alias="questionid")
+    question_text: str = Field(..., alias="questiontext", max_length=500)
+
+class UserSecurityAnswer(BaseModelConfig):
+    """User security answer model"""
+    user_answer_id: Optional[int] = Field(None, alias="useranswerid")
+    user_id: UUID = Field(..., alias="userid")
+    question_id: int = Field(..., alias="questionid")
+    answer_hash: str = Field(..., alias="answerhash")
+
+class CompleteSignupRequest(BaseModel):
+    """Complete signup request model"""
+    token: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=8)
+    security_question_id: int = Field(..., gt=0)
+    security_answer: str = Field(..., min_length=1)
+
+class VerifyInvitationResponse(BaseModel):
+    """Verify invitation response model"""
+    valid: bool
+    request_id: Optional[int] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    error: Optional[str] = None

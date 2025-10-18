@@ -87,6 +87,16 @@ async def require_admin_or_manager(current_user: Profile = Depends(get_current_u
     return current_user
 
 
+async def require_accounting_access(current_user: Profile = Depends(get_current_user_from_token)) -> Profile:
+    """Require admin, manager, or accountant role to view accounting event logs"""
+    if current_user.role and current_user.role.role_name not in ["Administrator", "Manager", "Accountant"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator, Manager, or Accountant access required"
+        )
+    return current_user
+
+
 @router.get("/health")
 async def event_logs_health():
     """Event logs service health check"""
@@ -99,10 +109,10 @@ async def get_account_event_logs(
     offset: int = Query(0, description="Number of logs to skip"),
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
     action_type: Optional[str] = Query(None, description="Filter by action type"),
-    current_user: Profile = Depends(require_admin_or_manager)
+    current_user: Profile = Depends(require_accounting_access)
 ):
     """
-    Get account event logs (admin/manager only)
+    Get account event logs (admin/manager/accountant)
     Returns audit trail for account-related actions
     """
     try:
@@ -159,10 +169,10 @@ async def get_journal_event_logs(
     offset: int = Query(0, description="Number of logs to skip"),
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
     action_type: Optional[str] = Query(None, description="Filter by action type"),
-    current_user: Profile = Depends(require_admin_or_manager)
+    current_user: Profile = Depends(require_accounting_access)
 ):
     """
-    Get journal event logs (admin/manager only)
+    Get journal event logs (admin/manager/accountant)
     Returns audit trail for journal entry-related actions
     """
     try:

@@ -100,11 +100,18 @@ class ApiClient {
   /**
    * Build request headers
    */
-  private buildHeaders(config?: RequestConfig): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...config?.headers,
-    };
+  private buildHeaders(config?: RequestConfig, body?: any): Record<string, string> {
+    const headers: Record<string, string> = {};
+    
+    // Only set Content-Type if not FormData (browser will set it with boundary for FormData)
+    if (!(body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
+    // Merge any custom headers (but allow them to override Content-Type if needed)
+    if (config?.headers) {
+      Object.assign(headers, config.headers);
+    }
 
     // Add authorization header if token exists and auth is required
     if (config?.requiresAuth !== false) {
@@ -135,7 +142,7 @@ class ApiClient {
     } = config;
 
     const url = this.buildUrl(endpoint);
-    const headers = this.buildHeaders(config);
+    const headers = this.buildHeaders(config, body);
 
     const requestInit: RequestInit = {
       method,
@@ -144,7 +151,13 @@ class ApiClient {
 
     // Add body for non-GET requests
     if (body && method !== 'GET') {
-      requestInit.body = typeof body === 'string' ? body : JSON.stringify(body);
+      // If body is FormData or already a string, use it directly
+      // Otherwise, stringify it for JSON
+      if (body instanceof FormData || typeof body === 'string') {
+        requestInit.body = body;
+      } else {
+        requestInit.body = JSON.stringify(body);
+      }
     }
 
     // Debug logging

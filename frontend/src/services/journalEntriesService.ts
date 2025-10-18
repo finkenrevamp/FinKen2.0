@@ -65,6 +65,7 @@ export interface CreateJournalEntryRequest {
     type: 'Debit' | 'Credit';
     amount: string;
   }[];
+  files?: File[];
 }
 
 /**
@@ -148,7 +149,28 @@ class JournalEntriesService {
    */
   async createJournalEntry(entryData: CreateJournalEntryRequest): Promise<JournalEntry> {
     try {
-      const response = await apiClient.post<JournalEntry>(this.basePath, entryData);
+      const formData = new FormData();
+      
+      // Add entry data as JSON
+      formData.append('entry_date', entryData.entry_date);
+      if (entryData.description) {
+        formData.append('description', entryData.description);
+      }
+      formData.append('is_adjusting_entry', String(entryData.is_adjusting_entry || false));
+      formData.append('lines', JSON.stringify(entryData.lines));
+      
+      // Add files if provided
+      if (entryData.files && entryData.files.length > 0) {
+        entryData.files.forEach((file) => {
+          formData.append('files', file);
+        });
+      }
+      
+      const response = await apiClient.post<JournalEntry>(this.basePath, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } catch (error) {
       if (error instanceof ApiError) {

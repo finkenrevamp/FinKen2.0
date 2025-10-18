@@ -38,6 +38,7 @@ import {
   AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import Header from '../components/Header';
+import NewJournalEntryDialog from '../components/NewJournalEntryDialog';
 import type { User } from '../types/auth';
 import { 
   journalEntriesService, 
@@ -64,6 +65,9 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   // Details dialog state
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  
+  // New entry dialog state
+  const [newEntryOpen, setNewEntryOpen] = useState(false);
 
   // Fetch journal entries
   const fetchJournalEntries = useCallback(async () => {
@@ -289,7 +293,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
             color="primary"
             startIcon={<AddIcon />}
             size="large"
-            disabled
+            onClick={() => setNewEntryOpen(true)}
             sx={{ height: 'fit-content' }}
           >
             New Entry
@@ -671,6 +675,15 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
           <Button onClick={handleCloseDetails}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* New Entry Dialog */}
+      <NewJournalEntryDialog
+        open={newEntryOpen}
+        onClose={() => setNewEntryOpen(false)}
+        onSuccess={() => {
+          fetchJournalEntries();
+        }}
+      />
     </Box>
   );
 };

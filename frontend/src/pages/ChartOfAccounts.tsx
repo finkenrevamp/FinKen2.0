@@ -16,6 +16,7 @@ import {
   CircularProgress,
   Alert,
   Snackbar,
+  Autocomplete,
 } from '@mui/material';
 import {
   DataGrid,
@@ -121,6 +122,22 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  // Get unique subcategories from existing accounts
+  const existingSubcategories = useMemo(() => {
+    const subcategories = accounts
+      .map(account => account.subcategory)
+      .filter((subcategory): subcategory is string => !!subcategory && subcategory.trim() !== '');
+    return Array.from(new Set(subcategories)).sort();
+  }, [accounts]);
+
+  // Standard categories plus any custom ones from existing accounts
+  const categoryOptions = useMemo(() => {
+    const standardCategories = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
+    const existingCategories = accounts.map(account => account.category);
+    const allCategories = Array.from(new Set([...standardCategories, ...existingCategories]));
+    return allCategories.sort();
+  }, [accounts]);
 
   // Filter accounts based on search and balance range
   const filteredAccounts = useMemo(() => {
@@ -389,7 +406,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
     {
       field: 'comment',
       headerName: 'Comment',
-      width: 200,
+      width: 150,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {
@@ -408,7 +425,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
         const isInactive = !account.is_active;
         
         return (
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', height: '100%' }}>
             <Tooltip title="Edit Account">
               <IconButton
                 size="small"
@@ -642,23 +659,34 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
               rows={2}
             />
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Category"
-                select
+              <Autocomplete
+                freeSolo
+                options={categoryOptions}
                 value={createDialog.data.category}
-                onChange={(e) => setCreateDialog((prev) => ({ 
-                  ...prev, 
-                  data: { ...prev.data, category: e.target.value as any } 
-                }))}
+                onChange={(_event, newValue) => {
+                  setCreateDialog((prev) => ({ 
+                    ...prev, 
+                    data: { ...prev.data, category: newValue as any || 'Asset' } 
+                  }));
+                }}
+                onInputChange={(_event, newInputValue) => {
+                  if (newInputValue) {
+                    setCreateDialog((prev) => ({ 
+                      ...prev, 
+                      data: { ...prev.data, category: newInputValue as any } 
+                    }));
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Category"
+                    required
+                  />
+                )}
                 fullWidth
-                required
-              >
-                <MenuItem value="Asset">Asset</MenuItem>
-                <MenuItem value="Liability">Liability</MenuItem>
-                <MenuItem value="Equity">Equity</MenuItem>
-                <MenuItem value="Revenue">Revenue</MenuItem>
-                <MenuItem value="Expense">Expense</MenuItem>
-              </TextField>
+                sx={{ flex: 1 }}
+              />
               <TextField
                 label="Normal Side"
                 select
@@ -669,20 +697,37 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
                 }))}
                 fullWidth
                 required
+                sx={{ flex: 1 }}
               >
                 <MenuItem value="Debit">Debit</MenuItem>
                 <MenuItem value="Credit">Credit</MenuItem>
               </TextField>
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Subcategory"
-                value={createDialog.data.subcategory}
-                onChange={(e) => setCreateDialog((prev) => ({ 
-                  ...prev, 
-                  data: { ...prev.data, subcategory: e.target.value } 
-                }))}
+              <Autocomplete
+                freeSolo
+                options={existingSubcategories}
+                value={createDialog.data.subcategory || ''}
+                onChange={(_event, newValue) => {
+                  setCreateDialog((prev) => ({ 
+                    ...prev, 
+                    data: { ...prev.data, subcategory: newValue || '' } 
+                  }));
+                }}
+                onInputChange={(_event, newInputValue) => {
+                  setCreateDialog((prev) => ({ 
+                    ...prev, 
+                    data: { ...prev.data, subcategory: newInputValue } 
+                  }));
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Subcategory"
+                  />
+                )}
                 fullWidth
+                sx={{ flex: 1 }}
               />
               <TextField
                 label="Initial Balance"
@@ -694,6 +739,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
                 }))}
                 fullWidth
                 inputProps={{ step: '0.01' }}
+                sx={{ flex: 1 }}
               />
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>
@@ -795,22 +841,33 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
               rows={2}
             />
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Category"
-                select
+              <Autocomplete
+                freeSolo
+                options={categoryOptions}
                 value={editDialog.data.category || ''}
-                onChange={(e) => setEditDialog((prev) => ({ 
-                  ...prev, 
-                  data: { ...prev.data, category: e.target.value as any } 
-                }))}
+                onChange={(_event, newValue) => {
+                  setEditDialog((prev) => ({ 
+                    ...prev, 
+                    data: { ...prev.data, category: newValue as any || '' } 
+                  }));
+                }}
+                onInputChange={(_event, newInputValue) => {
+                  if (newInputValue) {
+                    setEditDialog((prev) => ({ 
+                      ...prev, 
+                      data: { ...prev.data, category: newInputValue as any } 
+                    }));
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Category"
+                  />
+                )}
                 fullWidth
-              >
-                <MenuItem value="Asset">Asset</MenuItem>
-                <MenuItem value="Liability">Liability</MenuItem>
-                <MenuItem value="Equity">Equity</MenuItem>
-                <MenuItem value="Revenue">Revenue</MenuItem>
-                <MenuItem value="Expense">Expense</MenuItem>
-              </TextField>
+                sx={{ flex: 1 }}
+              />
               <TextField
                 label="Normal Side"
                 select
@@ -820,20 +877,37 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
                   data: { ...prev.data, normal_side: e.target.value as any } 
                 }))}
                 fullWidth
+                sx={{ flex: 1 }}
               >
                 <MenuItem value="Debit">Debit</MenuItem>
                 <MenuItem value="Credit">Credit</MenuItem>
               </TextField>
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Subcategory"
+              <Autocomplete
+                freeSolo
+                options={existingSubcategories}
                 value={editDialog.data.subcategory || ''}
-                onChange={(e) => setEditDialog((prev) => ({ 
-                  ...prev, 
-                  data: { ...prev.data, subcategory: e.target.value } 
-                }))}
+                onChange={(_event, newValue) => {
+                  setEditDialog((prev) => ({ 
+                    ...prev, 
+                    data: { ...prev.data, subcategory: newValue || '' } 
+                  }));
+                }}
+                onInputChange={(_event, newInputValue) => {
+                  setEditDialog((prev) => ({ 
+                    ...prev, 
+                    data: { ...prev.data, subcategory: newInputValue } 
+                  }));
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Subcategory"
+                  />
+                )}
                 fullWidth
+                sx={{ flex: 1 }}
               />
               <TextField
                 label="Initial Balance"
@@ -845,6 +919,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
                 }))}
                 fullWidth
                 inputProps={{ step: '0.01' }}
+                sx={{ flex: 1 }}
               />
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>

@@ -473,7 +473,7 @@ const Users: React.FC<UsersProps> = ({ user, onLogout }) => {
         const isSuspended = userData.is_suspended;
         
         return (
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', height: '100%' }}>
             <Tooltip title="Edit User">
               <IconButton
                 size="small"

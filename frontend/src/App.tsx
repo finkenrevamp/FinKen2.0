@@ -30,6 +30,9 @@ import BalanceSheet from './pages/BalanceSheet';
 // Import logo
 import finkenLogo from './assets/finken2.0logoTransparent.png';
 
+// Import components
+import HelpButton from './components/HelpButton';
+
 import './App.css'
 
 // Create Material UI theme
@@ -69,7 +72,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
             src={finkenLogo}
             alt="FinKen Logo"
             sx={{
-              height: { xs: 100, sm: 120, md: 150 },
+              height: { xs: 100, sm: 120, md: 600 },
               width: 'auto',
               mb: 3,
               filter: 'brightness(0) invert(1) drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
@@ -99,7 +102,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
   
   return isAuthenticated && user ? (
-    <>{children}</>
+    <>
+      {children}
+      <HelpButton />
+    </>
   ) : (
     <Navigate to="/sign-in" replace />
   );

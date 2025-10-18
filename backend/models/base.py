@@ -13,6 +13,7 @@ class BaseModelConfig(BaseModel):
     """Base model configuration for all Pydantic models"""
     model_config = ConfigDict(
         from_attributes=True,
+        populate_by_name=True,
         validate_assignment=True,
         arbitrary_types_allowed=True,
         json_encoders={

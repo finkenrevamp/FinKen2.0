@@ -23,7 +23,8 @@ class ChartOfAccounts(BaseModelConfig, TimestampMixin, UserMixin):
     statement_type: Optional[str] = Field(None, alias="StatementType")
     is_active: bool = Field(default=True, alias="IsActive")
     date_created: datetime = Field(default_factory=datetime.utcnow, alias="DateCreated")
-    created_by_user_id: UUID = Field(..., alias="CreatedByUserID")
+    created_by_user_id: Optional[UUID] = Field(None, alias="CreatedByUserID")
+    created_by_username: Optional[str] = None  # Username of the creator (from join)
     comment: Optional[str] = Field(None, alias="Comment")
 
 class ChartOfAccountsCreate(BaseModel):

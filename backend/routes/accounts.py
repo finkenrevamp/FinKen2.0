@@ -25,7 +25,7 @@ async def accounts_health():
     """Accounts service health check"""
     return {"status": "healthy", "service": "accounts"}
 
-@router.get("", response_model=List[ChartOfAccounts])
+@router.get("", response_model=List[ChartOfAccounts], response_model_by_alias=False)
 async def get_all_accounts(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     category: Optional[str] = Query(None, description="Filter by account category"),
@@ -38,8 +38,10 @@ async def get_all_accounts(
     try:
         supabase = get_supabase_client()
         
-        # Build query
-        query = supabase.from_("chartofaccounts").select("*")
+        # Build query with join to profiles table to get creator username
+        query = supabase.from_("chartofaccounts").select(
+            "*, profiles!chartofaccounts_CreatedByUserID_fkey(Username)"
+        )
         
         # Apply filters if provided
         if is_active is not None:
@@ -54,8 +56,17 @@ async def get_all_accounts(
         
         result = query.execute()
         
-        # Convert to Pydantic models
-        accounts = [ChartOfAccounts(**account) for account in result.data]
+        # Convert to Pydantic models and add creator username
+        accounts = []
+        for account_data in result.data:
+            # Extract creator username from nested profiles object
+            account_dict = {**account_data}
+            if account_data.get("profiles") and isinstance(account_data["profiles"], dict):
+                account_dict["created_by_username"] = account_data["profiles"].get("Username")
+            # Remove the nested profiles object
+            if "profiles" in account_dict:
+                del account_dict["profiles"]
+            accounts.append(ChartOfAccounts(**account_dict))
         
         return accounts
         
@@ -68,7 +79,7 @@ async def get_all_accounts(
             detail="An error occurred while fetching accounts"
         )
 
-@router.get("/{account_id}", response_model=ChartOfAccounts)
+@router.get("/{account_id}", response_model=ChartOfAccounts, response_model_by_alias=False)
 async def get_account(
     account_id: int,
     current_user: Profile = Depends(get_current_user_from_token)
@@ -100,7 +111,7 @@ async def get_account(
             detail="An error occurred while fetching the account"
         )
 
-@router.post("", response_model=ChartOfAccounts, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ChartOfAccounts, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 async def create_account(
     account: ChartOfAccountsCreate,
     current_user: Profile = Depends(require_admin)
@@ -184,7 +195,7 @@ async def create_account(
             detail="An error occurred while creating the account"
         )
 
-@router.patch("/{account_id}", response_model=ChartOfAccounts)
+@router.patch("/{account_id}", response_model=ChartOfAccounts, response_model_by_alias=False)
 async def update_account(
     account_id: int,
     account_update: ChartOfAccountsUpdate,
@@ -306,6 +317,7 @@ async def deactivate_account(
     Deactivate an account (soft delete)
     Requires administrator privileges
     Note: This sets IsActive to false rather than deleting the record
+    Cannot deactivate accounts with non-zero balances
     """
     try:
         supabase = get_supabase_client()
@@ -324,6 +336,14 @@ async def deactivate_account(
             return {
                 "message": f"Account {account_id} is already deactivated"
             }
+        
+        # Check if account has a non-zero balance
+        initial_balance = Decimal(str(existing.data.get("InitialBalance", "0.00")))
+        if initial_balance != Decimal("0.00"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot deactivate account with non-zero balance. Current balance: {initial_balance}"
+            )
         
         # Set current user for audit logging
         set_current_user(str(current_user.id))

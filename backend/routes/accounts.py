@@ -371,3 +371,114 @@ async def deactivate_account(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while deactivating the account"
         )
+
+@router.get("/{account_id}/ledger", response_model=List[dict], response_model_by_alias=False)
+async def get_account_ledger(
+    account_id: int,
+    start_date: Optional[str] = Query(None, description="Filter by start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Filter by end date (YYYY-MM-DD)"),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Get account ledger entries with calculated running balance
+    Returns ledger entries with post reference (journal entry ID), date, description, debit, credit, and balance
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if account exists
+        account_result = supabase.from_("chartofaccounts").select("*").eq("AccountID", account_id).single().execute()
+        
+        if not account_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Account with ID {account_id} not found"
+            )
+        
+        account = account_result.data
+        initial_balance = Decimal(str(account.get("InitialBalance", "0.00")))
+        normal_side = account.get("NormalSide", "Debit")
+        
+        # Build query for ledger entries
+        query = supabase.from_("accountledger").select(
+            "LedgerID, JournalEntryID, TransactionDate, Description, Debit, Credit, PostTimestamp"
+        ).eq("AccountID", account_id)
+        
+        # Apply date filters if provided
+        if start_date:
+            query = query.gte("TransactionDate", start_date)
+        
+        if end_date:
+            query = query.lte("TransactionDate", end_date)
+        
+        # Order by transaction date and post timestamp
+        query = query.order("TransactionDate", desc=False)
+        query = query.order("PostTimestamp", desc=False)
+        
+        result = query.execute()
+        
+        # Calculate running balance
+        ledger_entries = []
+        running_balance = initial_balance
+        
+        for entry in result.data:
+            debit = Decimal(str(entry.get("Debit", "0.00")))
+            credit = Decimal(str(entry.get("Credit", "0.00")))
+            
+            # Calculate balance based on normal side
+            if normal_side == "Debit":
+                running_balance = running_balance + debit - credit
+            else:  # Credit
+                running_balance = running_balance + credit - debit
+            
+            ledger_entries.append({
+                "ledger_id": entry.get("LedgerID"),
+                "date": entry.get("TransactionDate"),
+                "post_ref": f"JE-{entry.get('JournalEntryID')}",
+                "description": entry.get("Description") or "",
+                "debit": str(debit),
+                "credit": str(credit),
+                "balance": str(running_balance),
+                "post_timestamp": entry.get("PostTimestamp")
+            })
+        
+        # Add initial balance as first entry only if:
+        # 1. No date filters are applied, OR
+        # 2. The account creation date falls within the date range
+        should_show_opening = False
+        account_created_date = str(account.get("DateCreated", ""))[:10]  # Get date portion only
+        
+        if not start_date and not end_date:
+            # No filters, always show opening if there are entries or non-zero balance
+            should_show_opening = (ledger_entries or initial_balance != Decimal("0.00"))
+        else:
+            # Check if opening date falls within the filtered range
+            if start_date and account_created_date < start_date:
+                should_show_opening = False
+            elif end_date and account_created_date > end_date:
+                should_show_opening = False
+            else:
+                should_show_opening = (ledger_entries or initial_balance != Decimal("0.00"))
+        
+        if should_show_opening:
+            return [{
+                "ledger_id": None,
+                "date": account.get("DateCreated"),
+                "post_ref": "Opening",
+                "description": "Initial Balance",
+                "debit": str(initial_balance) if normal_side == "Debit" and initial_balance > 0 else "0.00",
+                "credit": str(abs(initial_balance)) if normal_side == "Credit" and initial_balance > 0 else "0.00",
+                "balance": str(initial_balance),
+                "post_timestamp": account.get("DateCreated")
+            }] + ledger_entries
+        
+        return ledger_entries
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get account ledger error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while fetching the account ledger"
+        )

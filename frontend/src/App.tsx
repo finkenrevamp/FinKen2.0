@@ -21,6 +21,7 @@ import ManageRegistrationRequests from './pages/ManageRegistrationRequests';
 import PasswordExpiry from './pages/PasswordExpiry';
 import Journalize from './pages/Journalize';
 import ChartOfAccounts from './pages/ChartOfAccounts';
+import AccountLedger from './pages/AccountLedger';
 import EventLogs from './pages/EventLogs';
 import TrialBalance from './pages/TrialBalance';
 import IncomeStatement from './pages/IncomeStatement';
@@ -266,6 +267,14 @@ const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             {user && <ChartOfAccounts user={user} onLogout={logout} />}
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account-ledger/:accountId"
+        element={
+          <ProtectedRoute>
+            {user && <AccountLedger user={user} onLogout={logout} />}
           </ProtectedRoute>
         }
       />

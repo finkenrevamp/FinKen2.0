@@ -160,6 +160,56 @@ class AccountsService {
       throw new Error('Failed to deactivate account');
     }
   }
+
+  /**
+   * Get account ledger entries
+   */
+  async getAccountLedger(
+    accountId: number,
+    filters?: {
+      start_date?: string;
+      end_date?: string;
+    }
+  ): Promise<LedgerEntry[]> {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters?.start_date) {
+        params.append('start_date', filters.start_date);
+      }
+      
+      if (filters?.end_date) {
+        params.append('end_date', filters.end_date);
+      }
+      
+      const queryString = params.toString();
+      const endpoint = queryString 
+        ? `${this.basePath}/${accountId}/ledger?${queryString}` 
+        : `${this.basePath}/${accountId}/ledger`;
+      
+      const response = await apiClient.get<LedgerEntry[]>(endpoint);
+      return response.data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(error.message);
+      }
+      throw new Error('Failed to fetch account ledger');
+    }
+  }
+}
+
+/**
+ * Ledger entry interface
+ */
+export interface LedgerEntry {
+  ledger_id: number | null;
+  date: string;
+  post_ref: string;
+  description: string;
+  debit: string;
+  credit: string;
+  balance: string;
+  post_timestamp: string;
 }
 
 // Export singleton instance

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -17,6 +18,7 @@ import {
   Alert,
   Snackbar,
   Autocomplete,
+  Link,
 } from '@mui/material';
 import {
   DataGrid,
@@ -41,6 +43,7 @@ interface ChartOfAccountsProps {
 }
 
 const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => {
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<AccountData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -310,6 +313,26 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
       width: 140,
       sortable: true,
       filterable: true,
+      renderCell: (params: GridRenderCellParams) => {
+        const account = params.row as AccountData;
+        return (
+          <Link
+            component="button"
+            variant="body2"
+            onClick={() => navigate(`/account-ledger/${account.account_id}`)}
+            sx={{
+              cursor: 'pointer',
+              color: 'primary.main',
+              textDecoration: 'none',
+              '&:hover': {
+                textDecoration: 'underline',
+              },
+            }}
+          >
+            {params.value}
+          </Link>
+        );
+      },
     },
     {
       field: 'account_name',
@@ -317,6 +340,26 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
       width: 200,
       sortable: true,
       filterable: true,
+      renderCell: (params: GridRenderCellParams) => {
+        const account = params.row as AccountData;
+        return (
+          <Link
+            component="button"
+            variant="body2"
+            onClick={() => navigate(`/account-ledger/${account.account_id}`)}
+            sx={{
+              cursor: 'pointer',
+              color: 'primary.main',
+              textDecoration: 'none',
+              '&:hover': {
+                textDecoration: 'underline',
+              },
+            }}
+          >
+            {params.value}
+          </Link>
+        );
+      },
     },
     {
       field: 'category',
@@ -457,7 +500,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
         );
       },
     }] : []),
-  ], [isAdmin]);
+  ], [isAdmin, navigate]);
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: 'background.default', minHeight: '100vh', width: '100%' }}>

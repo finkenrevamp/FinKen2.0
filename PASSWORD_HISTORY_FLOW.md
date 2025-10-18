@@ -69,21 +69,21 @@ Success Response
 
 ```
 ┌─────────────────────────────────────────────┐
-│         Application Layer                    │
+│         Application Layer                   │
 │  (Signup, Change Password, Reset Password)  │
 └────────────────┬────────────────────────────┘
                  ↓
 ┌─────────────────────────────────────────────┐
-│      PASSWORD MIDDLEWARE LAYER               │
-│                                              │
-│  PasswordHistoryService                      │
+│      PASSWORD MIDDLEWARE LAYER              │
+│                                             │
+│  PasswordHistoryService                     │
 │  ├─ hash_password()                         │
 │  ├─ verify_password()                       │
 │  ├─ get_password_history()                  │
 │  ├─ is_password_reused()                    │
 │  └─ validate_and_store_password()           │
-│                                              │
-└────────┬────────────────────────┬────────────┘
+│                                             │
+└────────┬────────────────────────┬───────────┘
          ↓                        ↓
 ┌─────────────────┐    ┌──────────────────────┐
 │  Supabase Auth  │    │  password_history    │
@@ -145,12 +145,12 @@ Compare New Password against Each Hash
                                               ↓
                         ┌─────────────────────────────┐
                         │      Supabase               │
-                        │  ┌──────────┐  ┌──────────┐│
-                        │  │   Auth   │  │ Database ││
-                        │  │  Table   │  │  Table   ││
-                        │  │ (users)  │  │(password_││
-                        │  │          │  │ history) ││
-                        │  └──────────┘  └──────────┘│
+                        │  ┌──────────┐  ┌──────────┐ │
+                        │  │   Auth   │  │ Database │ │
+                        │  │  Table   │  │  Table   │ │
+                        │  │ (users)  │  │(password_│ │
+                        │  │          │  │ history) │ │
+                        │  └──────────┘  └──────────┘ │
                         └─────────────────────────────┘
 ```
 

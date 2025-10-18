@@ -303,13 +303,15 @@ const EventLogs: React.FC<EventLogsProps> = ({ user, onLogout }) => {
             >
               Journal Logs
             </Button>
-            <Button
-              variant={selectedLogType === 'users' ? 'contained' : 'outlined'}
-              onClick={() => handleLogTypeChange('users')}
-              startIcon={<People />}
-            >
-              User Logs
-            </Button>
+            {(user.role === 'Administrator' || user.role === 'Manager') && (
+              <Button
+                variant={selectedLogType === 'users' ? 'contained' : 'outlined'}
+                onClick={() => handleLogTypeChange('users')}
+                startIcon={<People />}
+              >
+                User Logs
+              </Button>
+            )}
           </ButtonGroup>
         </Box>
 

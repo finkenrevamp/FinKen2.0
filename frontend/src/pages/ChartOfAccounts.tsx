@@ -310,7 +310,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
     {
       field: 'account_number',
       headerName: 'Account Number',
-      width: 140,
+      width: 130,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {
@@ -337,7 +337,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
     {
       field: 'account_name',
       headerName: 'Account Name',
-      width: 200,
+      width: 250,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {
@@ -364,7 +364,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
     {
       field: 'category',
       headerName: 'Type',
-      width: 120,
+      width: 85,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => (
@@ -415,7 +415,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
     {
       field: 'is_active',
       headerName: 'Active',
-      width: 100,
+      width: 80,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => (

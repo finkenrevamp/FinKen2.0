@@ -364,7 +364,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
     {
       field: 'category',
       headerName: 'Type',
-      width: 85,
+      width: 95,
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => (

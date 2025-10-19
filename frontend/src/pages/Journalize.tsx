@@ -68,6 +68,12 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   
   // New entry dialog state
   const [newEntryOpen, setNewEntryOpen] = useState(false);
+  
+  // Approval/Rejection state
+  const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Fetch journal entries
   const fetchJournalEntries = useCallback(async () => {
@@ -81,6 +87,16 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       if (endDate) filters.end_date = endDate;
       
       const entries = await journalEntriesService.getAllJournalEntries(filters);
+      
+      // Debug logging
+      if (entries.length > 0) {
+        console.log('First entry sample:', {
+          created_by_username: entries[0].created_by_username,
+          lines_count: entries[0].lines?.length,
+          first_line: entries[0].lines?.[0]
+        });
+      }
+      
       setJournalEntries(entries);
     } catch (err: any) {
       console.error('Failed to fetch journal entries:', err);
@@ -174,6 +190,64 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
     setDetailsOpen(false);
     setSelectedEntry(null);
   };
+
+  const handleApprove = async () => {
+    if (!selectedEntry) return;
+    
+    try {
+      setApproving(true);
+      setError(null);
+      
+      await journalEntriesService.approveJournalEntry(selectedEntry.journal_entry_id);
+      
+      // Refresh entries and close dialog
+      await fetchJournalEntries();
+      setDetailsOpen(false);
+      setSelectedEntry(null);
+    } catch (err: any) {
+      console.error('Failed to approve journal entry:', err);
+      setError(err.message || 'Failed to approve journal entry');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleRejectClick = () => {
+    setRejectDialogOpen(true);
+  };
+
+  const handleRejectCancel = () => {
+    setRejectDialogOpen(false);
+    setRejectionReason('');
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!selectedEntry || !rejectionReason.trim()) return;
+    
+    try {
+      setRejecting(true);
+      setError(null);
+      
+      await journalEntriesService.rejectJournalEntry(
+        selectedEntry.journal_entry_id,
+        rejectionReason
+      );
+      
+      // Refresh entries and close dialogs
+      await fetchJournalEntries();
+      setRejectDialogOpen(false);
+      setRejectionReason('');
+      setDetailsOpen(false);
+      setSelectedEntry(null);
+    } catch (err: any) {
+      console.error('Failed to reject journal entry:', err);
+      setError(err.message || 'Failed to reject journal entry');
+    } finally {
+      setRejecting(false);
+    }
+  };
+
+  const canApproveOrReject = user.role === 'Manager' || user.role === 'Administrator';
 
   const columns: GridColDef[] = useMemo(() => [
     {
@@ -672,7 +746,67 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDetails}>Close</Button>
+          <Box sx={{ display: 'flex', gap: 2, width: '100%', justifyContent: 'space-between' }}>
+            <Box>
+              {selectedEntry && selectedEntry.status === 'Pending' && canApproveOrReject && (
+                <>
+                  <Button
+                    onClick={handleApprove}
+                    variant="contained"
+                    color="success"
+                    disabled={approving}
+                    startIcon={<CheckCircleIcon />}
+                  >
+                    {approving ? 'Approving...' : 'Approve'}
+                  </Button>
+                  <Button
+                    onClick={handleRejectClick}
+                    variant="contained"
+                    color="error"
+                    disabled={rejecting}
+                    startIcon={<CancelIcon />}
+                    sx={{ ml: 1 }}
+                  >
+                    Reject
+                  </Button>
+                </>
+              )}
+            </Box>
+            <Button onClick={handleCloseDetails}>Close</Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reject Reason Dialog */}
+      <Dialog open={rejectDialogOpen} onClose={handleRejectCancel} maxWidth="sm" fullWidth>
+        <DialogTitle>Reject Journal Entry</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom sx={{ mt: 1 }}>
+            Please provide a reason for rejecting this journal entry:
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="Enter rejection reason (minimum 5 characters)..."
+            sx={{ mt: 2 }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleRejectCancel} disabled={rejecting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRejectConfirm}
+            variant="contained"
+            color="error"
+            disabled={rejecting || rejectionReason.trim().length < 5}
+          >
+            {rejecting ? <CircularProgress size={24} /> : 'Confirm Rejection'}
+          </Button>
         </DialogActions>
       </Dialog>
 

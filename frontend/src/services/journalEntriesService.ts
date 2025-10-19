@@ -166,11 +166,8 @@ class JournalEntriesService {
         });
       }
       
-      const response = await apiClient.post<JournalEntry>(this.basePath, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Don't set Content-Type header - let the browser set it with the correct boundary
+      const response = await apiClient.post<JournalEntry>(this.basePath, formData);
       return response.data;
     } catch (error) {
       if (error instanceof ApiError) {
@@ -226,9 +223,12 @@ class JournalEntriesService {
     rejectionReason: string
   ): Promise<JournalEntry> {
     try {
+      const formData = new FormData();
+      formData.append('rejection_reason', rejectionReason);
+      
       const response = await apiClient.post<JournalEntry>(
         `${this.basePath}/${journalEntryId}/reject`,
-        { rejection_reason: rejectionReason }
+        formData
       );
       return response.data;
     } catch (error) {

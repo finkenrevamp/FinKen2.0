@@ -39,6 +39,39 @@ async def journal_entries_health():
     """Journal entries service health check"""
     return {"status": "healthy", "service": "journal_entries"}
 
+@router.get("/test-query")
+async def test_query(current_user: Profile = Depends(get_current_user_from_token)):
+    """Test endpoint to verify query structure"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.from_("journalentries").select(
+            """
+            *,
+            creator:profiles!journalentries_CreatedByUserID_fkey(Username),
+            journalentrylines(
+                LineID,
+                AccountID,
+                Type,
+                Amount,
+                chartofaccounts(AccountNumber, AccountName)
+            )
+            """
+        ).limit(1).execute()
+        
+        return {
+            "count": len(result.data) if result.data else 0,
+            "data": result.data[0] if result.data else None,
+            "has_creator": result.data[0].get("creator") if result.data else None,
+            "has_lines": len(result.data[0].get("journalentrylines", [])) if result.data else 0
+        }
+    except Exception as e:
+        logger.error(f"Test query error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
 @router.get("")
 async def get_all_journal_entries(
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
@@ -54,7 +87,7 @@ async def get_all_journal_entries(
     try:
         supabase = get_supabase_client()
         
-        # Build query with joins to get creator username and entry lines
+        # Build query with joins - use exact same syntax as test script that works
         query = supabase.from_("journalentries").select(
             """
             *,
@@ -89,28 +122,67 @@ async def get_all_journal_entries(
         
         result = query.execute()
         
+        # Debug logging - log the raw result
+        logger.info(f"=== JOURNAL ENTRIES QUERY DEBUG ===")
+        logger.info(f"Query result count: {len(result.data) if result.data else 0}")
+        if result.data and len(result.data) > 0:
+            first_entry = result.data[0]
+            logger.info(f"First entry keys: {list(first_entry.keys())}")
+            logger.info(f"First entry JournalEntryID: {first_entry.get('JournalEntryID')}")
+            logger.info(f"First entry creator type: {type(first_entry.get('creator'))}")
+            logger.info(f"First entry creator value: {first_entry.get('creator')}")
+            logger.info(f"First entry journalentrylines type: {type(first_entry.get('journalentrylines'))}")
+            logger.info(f"First entry lines count: {len(first_entry.get('journalentrylines', []))}")
+            if first_entry.get('journalentrylines'):
+                logger.info(f"First line: {first_entry.get('journalentrylines')[0]}")
+        else:
+            logger.warning(f"No journal entries returned from query!")
+        logger.info(f"=== END DEBUG ===")
+        
         # Format response
         journal_entries = []
         for entry_data in result.data:
-            # Extract creator and approver usernames
+            # Extract creator username
             created_by_username = "Unknown"
-            if entry_data.get("creator") and isinstance(entry_data["creator"], dict):
-                created_by_username = entry_data["creator"].get("Username", "Unknown")
+            creator_data = entry_data.get("creator")
             
+            if creator_data:
+                if isinstance(creator_data, dict):
+                    created_by_username = creator_data.get("Username", "Unknown")
+                elif isinstance(creator_data, list) and len(creator_data) > 0:
+                    created_by_username = creator_data[0].get("Username", "Unknown")
+            
+            # Extract approver username
             approved_by_username = None
-            if entry_data.get("approver") and isinstance(entry_data["approver"], dict):
-                approved_by_username = entry_data["approver"].get("Username")
+            approver_data = entry_data.get("approver")
+            if approver_data:
+                if isinstance(approver_data, dict):
+                    approved_by_username = approver_data.get("Username")
+                elif isinstance(approver_data, list) and len(approver_data) > 0:
+                    approved_by_username = approver_data[0].get("Username")
             
             # Format entry lines
             lines = []
             for line in entry_data.get("journalentrylines", []):
-                account = line.get("chartofaccounts", {})
+                account = line.get("chartofaccounts")
+                
+                # Handle both dict and list responses
+                account_number = ""
+                account_name = ""
+                if account:
+                    if isinstance(account, dict):
+                        account_number = account.get("AccountNumber", "")
+                        account_name = account.get("AccountName", "")
+                    elif isinstance(account, list) and len(account) > 0:
+                        account_number = account[0].get("AccountNumber", "")
+                        account_name = account[0].get("AccountName", "")
+                
                 lines.append({
                     "line_id": line.get("LineID"),
                     "journal_entry_id": entry_data.get("JournalEntryID"),
                     "account_id": line.get("AccountID"),
-                    "account_number": account.get("AccountNumber", ""),
-                    "account_name": account.get("AccountName", ""),
+                    "account_number": account_number,
+                    "account_name": account_name,
                     "type": line.get("Type"),
                     "amount": str(line.get("Amount", "0.00"))
                 })
@@ -132,12 +204,22 @@ async def get_all_journal_entries(
                 "attachments": []  # TODO: Implement attachments fetch
             })
         
+        # Log the formatted response
+        if journal_entries:
+            logger.info(f"=== FORMATTED RESPONSE ===")
+            logger.info(f"First formatted entry created_by: {journal_entries[0].get('created_by_username')}")
+            logger.info(f"First formatted entry lines count: {len(journal_entries[0].get('lines', []))}")
+            if journal_entries[0].get('lines'):
+                logger.info(f"First formatted line: {journal_entries[0]['lines'][0]}")
+            logger.info(f"=== END FORMATTED ===")
+        
         return journal_entries
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Get journal entries error: {e}")
+        logger.exception("Full traceback:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching journal entries"
@@ -178,25 +260,50 @@ async def get_journal_entry(
         
         entry_data = result.data
         
+        # Debug logging
+        logger.info(f"Entry data for ID {journal_entry_id}: creator={entry_data.get('creator')}, lines={len(entry_data.get('journalentrylines', []))}")
+        
         # Extract creator and approver usernames
         created_by_username = "Unknown"
-        if entry_data.get("creator") and isinstance(entry_data["creator"], dict):
-            created_by_username = entry_data["creator"].get("Username", "Unknown")
+        creator_data = entry_data.get("creator")
+        
+        # Handle both dict and list responses from Supabase
+        if creator_data:
+            if isinstance(creator_data, dict):
+                created_by_username = creator_data.get("Username", "Unknown")
+            elif isinstance(creator_data, list) and len(creator_data) > 0:
+                created_by_username = creator_data[0].get("Username", "Unknown")
         
         approved_by_username = None
-        if entry_data.get("approver") and isinstance(entry_data["approver"], dict):
-            approved_by_username = entry_data["approver"].get("Username")
+        approver_data = entry_data.get("approver")
+        if approver_data:
+            if isinstance(approver_data, dict):
+                approved_by_username = approver_data.get("Username")
+            elif isinstance(approver_data, list) and len(approver_data) > 0:
+                approved_by_username = approver_data[0].get("Username")
         
         # Format entry lines
         lines = []
         for line in entry_data.get("journalentrylines", []):
-            account = line.get("chartofaccounts", {})
+            account = line.get("chartofaccounts")
+            
+            # Handle both dict and list responses
+            account_number = ""
+            account_name = ""
+            if account:
+                if isinstance(account, dict):
+                    account_number = account.get("AccountNumber", "")
+                    account_name = account.get("AccountName", "")
+                elif isinstance(account, list) and len(account) > 0:
+                    account_number = account[0].get("AccountNumber", "")
+                    account_name = account[0].get("AccountName", "")
+            
             lines.append({
                 "line_id": line.get("LineID"),
                 "journal_entry_id": entry_data.get("JournalEntryID"),
                 "account_id": line.get("AccountID"),
-                "account_number": account.get("AccountNumber", ""),
-                "account_name": account.get("AccountName", ""),
+                "account_number": account_number,
+                "account_name": account_name,
                 "type": line.get("Type"),
                 "amount": str(line.get("Amount", "0.00"))
             })
@@ -212,8 +319,13 @@ async def get_journal_entry(
         attachments = []
         for attachment_data in attachments_result.data:
             uploaded_by_username = "Unknown"
-            if attachment_data.get("uploader") and isinstance(attachment_data["uploader"], dict):
-                uploaded_by_username = attachment_data["uploader"].get("Username", "Unknown")
+            uploader_data = attachment_data.get("uploader")
+            
+            if uploader_data:
+                if isinstance(uploader_data, dict):
+                    uploaded_by_username = uploader_data.get("Username", "Unknown")
+                elif isinstance(uploader_data, list) and len(uploader_data) > 0:
+                    uploaded_by_username = uploader_data[0].get("Username", "Unknown")
             
             attachments.append({
                 "attachment_id": attachment_data.get("AttachmentID"),
@@ -437,4 +549,192 @@ async def create_journal_entry(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while creating the journal entry: {str(e)}"
+        )
+
+@router.post("/{journal_entry_id}/approve")
+async def approve_journal_entry(
+    journal_entry_id: int,
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Approve a pending journal entry (Manager or Administrator only)
+    """
+    try:
+        # Check if user has permission (Manager or Administrator)
+        supabase = get_supabase_client()
+        
+        # Get user role
+        role_result = supabase.from_("profiles").select("roles(RoleName)").eq("id", str(current_user.id)).single().execute()
+        user_role = role_result.data.get("roles", {}).get("RoleName") if role_result.data else None
+        
+        if user_role not in ["Manager", "Administrator"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Managers and Administrators can approve journal entries"
+            )
+        
+        # Fetch the journal entry
+        entry_result = supabase.from_("journalentries").select("*").eq("JournalEntryID", journal_entry_id).single().execute()
+        
+        if not entry_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Journal entry with ID {journal_entry_id} not found"
+            )
+        
+        entry_data = entry_result.data
+        
+        # Check if entry is already approved or rejected
+        if entry_data.get("Status") == "Approved":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Journal entry is already approved"
+            )
+        
+        if entry_data.get("Status") == "Rejected":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot approve a rejected journal entry"
+            )
+        
+        # Update journal entry status
+        update_data = {
+            "Status": "Approved",
+            "ApprovedByUserID": str(current_user.id),
+            "ApprovalDate": datetime.utcnow().isoformat()
+        }
+        
+        supabase.from_("journalentries").update(update_data).eq("JournalEntryID", journal_entry_id).execute()
+        
+        # Post to account ledger
+        lines_result = supabase.from_("journalentrylines").select("*").eq("JournalEntryID", journal_entry_id).execute()
+        
+        for line in lines_result.data:
+            ledger_entry = {
+                "AccountID": line.get("AccountID"),
+                "JournalEntryID": journal_entry_id,
+                "TransactionDate": entry_data.get("EntryDate"),
+                "Description": entry_data.get("Description") or "Journal Entry",
+                "Debit": str(line.get("Amount")) if line.get("Type") == "Debit" else "0.00",
+                "Credit": str(line.get("Amount")) if line.get("Type") == "Credit" else "0.00",
+                "PostTimestamp": datetime.utcnow().isoformat()
+            }
+            supabase.from_("accountledger").insert(ledger_entry).execute()
+        
+        # Log the approval event
+        try:
+            log_entry = {
+                "UserID": str(current_user.id),
+                "Timestamp": datetime.utcnow().isoformat(),
+                "ActionType": "APPROVE",
+                "TableName": "journalentries",
+                "RecordID": str(journal_entry_id),
+                "BeforeValue": json.dumps({"status": entry_data.get("Status")}),
+                "AfterValue": json.dumps({"status": "Approved"})
+            }
+            supabase.from_("journal_event_logs").insert(log_entry).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to log approval: {log_error}")
+        
+        # Return updated entry
+        return await get_journal_entry(journal_entry_id, current_user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Approve journal entry error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while approving the journal entry: {str(e)}"
+        )
+
+@router.post("/{journal_entry_id}/reject")
+async def reject_journal_entry(
+    journal_entry_id: int,
+    rejection_reason: str = Form(...),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Reject a pending journal entry (Manager or Administrator only)
+    """
+    try:
+        # Check if user has permission (Manager or Administrator)
+        supabase = get_supabase_client()
+        
+        # Get user role
+        role_result = supabase.from_("profiles").select("roles(RoleName)").eq("id", str(current_user.id)).single().execute()
+        user_role = role_result.data.get("roles", {}).get("RoleName") if role_result.data else None
+        
+        if user_role not in ["Manager", "Administrator"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Managers and Administrators can reject journal entries"
+            )
+        
+        # Fetch the journal entry
+        entry_result = supabase.from_("journalentries").select("*").eq("JournalEntryID", journal_entry_id).single().execute()
+        
+        if not entry_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Journal entry with ID {journal_entry_id} not found"
+            )
+        
+        entry_data = entry_result.data
+        
+        # Check if entry is already approved or rejected
+        if entry_data.get("Status") == "Approved":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot reject an approved journal entry"
+            )
+        
+        if entry_data.get("Status") == "Rejected":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Journal entry is already rejected"
+            )
+        
+        # Validate rejection reason
+        if not rejection_reason or len(rejection_reason.strip()) < 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rejection reason must be at least 5 characters long"
+            )
+        
+        # Update journal entry status
+        update_data = {
+            "Status": "Rejected",
+            "ApprovedByUserID": str(current_user.id),
+            "ApprovalDate": datetime.utcnow().isoformat(),
+            "RejectionReason": rejection_reason
+        }
+        
+        supabase.from_("journalentries").update(update_data).eq("JournalEntryID", journal_entry_id).execute()
+        
+        # Log the rejection event
+        try:
+            log_entry = {
+                "UserID": str(current_user.id),
+                "Timestamp": datetime.utcnow().isoformat(),
+                "ActionType": "REJECT",
+                "TableName": "journalentries",
+                "RecordID": str(journal_entry_id),
+                "BeforeValue": json.dumps({"status": entry_data.get("Status")}),
+                "AfterValue": json.dumps({"status": "Rejected", "reason": rejection_reason})
+            }
+            supabase.from_("journal_event_logs").insert(log_entry).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to log rejection: {log_error}")
+        
+        # Return updated entry
+        return await get_journal_entry(journal_entry_id, current_user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reject journal entry error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while rejecting the journal entry: {str(e)}"
         )

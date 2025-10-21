@@ -34,6 +34,54 @@ ALLOWED_FILE_TYPES = {
 # File extensions
 ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.jpg', '.jpeg', '.png'}
 
+def get_file_download_url(supabase, bucket_name: str, file_path: str, expiry_seconds: int = 3600) -> str:
+    """
+    Generate a signed URL for downloading a file from Supabase storage
+    
+    Args:
+        supabase: Supabase client
+        bucket_name: Name of the storage bucket
+        file_path: Path to the file in the bucket
+        expiry_seconds: URL expiry time in seconds (default 1 hour)
+    
+    Returns:
+        Signed URL for file access
+    """
+    try:
+        # Remove bucket name from file_path if it's included
+        if file_path.startswith(f"{bucket_name}/"):
+            file_path = file_path[len(f"{bucket_name}/"):]
+        
+        # Try to create a signed URL for private buckets
+        try:
+            signed_url_result = supabase.storage.from_(bucket_name).create_signed_url(
+                file_path,
+                expiry_seconds
+            )
+            
+            if isinstance(signed_url_result, dict) and 'signedURL' in signed_url_result:
+                return signed_url_result['signedURL']
+            elif isinstance(signed_url_result, str):
+                return signed_url_result
+            else:
+                logger.warning(f"Unexpected signed URL result format: {signed_url_result}")
+                
+        except Exception as signed_error:
+            logger.warning(f"Could not create signed URL, trying public URL: {signed_error}")
+            # Fallback to public URL for public buckets
+            try:
+                public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
+                return public_url
+            except Exception as public_error:
+                logger.error(f"Could not get public URL either: {public_error}")
+        
+        # Last resort: return the path as-is
+        return f"{bucket_name}/{file_path}"
+        
+    except Exception as e:
+        logger.error(f"Error generating file URL: {e}")
+        return f"{bucket_name}/{file_path}"
+
 @router.get("/health")
 async def journal_entries_health():
     """Journal entries service health check"""
@@ -317,6 +365,8 @@ async def get_journal_entry(
         ).eq("JournalEntryID", journal_entry_id).execute()
         
         attachments = []
+        bucket_name = "documents"
+        
         for attachment_data in attachments_result.data:
             uploaded_by_username = "Unknown"
             uploader_data = attachment_data.get("uploader")
@@ -327,11 +377,18 @@ async def get_journal_entry(
                 elif isinstance(uploader_data, list) and len(uploader_data) > 0:
                     uploaded_by_username = uploader_data[0].get("Username", "Unknown")
             
+            # Get the stored file path
+            stored_file_path = attachment_data.get("FilePath")
+            
+            # Generate a signed URL for secure access
+            # This URL will be valid for 1 hour
+            download_url = get_file_download_url(supabase, bucket_name, stored_file_path, 3600)
+            
             attachments.append({
                 "attachment_id": attachment_data.get("AttachmentID"),
                 "journal_entry_id": attachment_data.get("JournalEntryID"),
                 "file_name": attachment_data.get("FileName"),
-                "file_path": attachment_data.get("FilePath"),
+                "file_path": download_url,  # Use signed URL for download
                 "file_type": attachment_data.get("FileType"),
                 "file_size": attachment_data.get("FileSize"),
                 "uploaded_by_user_id": uploaded_by_username,  # Return username instead of UUID
@@ -476,47 +533,76 @@ async def create_journal_entry(
         
         # Upload files to Supabase storage if provided
         attachment_ids = []
+        upload_errors = []
+        
         if files:
-            bucket_name = "documents"  # You may need to create this bucket in Supabase
+            bucket_name = "documents"  # Supabase storage bucket name
             
             for file in files:
                 if file.filename:
-                    # Generate unique filename
-                    file_ext = os.path.splitext(file.filename)[1]
-                    unique_filename = f"{journal_entry_id}/{uuid.uuid4()}{file_ext}"
-                    
-                    # Read file content
-                    file_content = await file.read()
-                    
-                    # Upload to Supabase storage
                     try:
-                        upload_result = supabase.storage.from_(bucket_name).upload(
-                            unique_filename,
-                            file_content,
-                            file_options={"content-type": file.content_type or "application/octet-stream"}
-                        )
+                        # Generate unique filename
+                        file_ext = os.path.splitext(file.filename)[1]
+                        unique_filename = f"{journal_entry_id}/{uuid.uuid4()}{file_ext}"
                         
-                        # Get public URL
-                        file_path = f"{bucket_name}/{unique_filename}"
+                        # Read file content
+                        file_content = await file.read()
                         
-                        # Insert attachment record
-                        attachment_insert = {
-                            "JournalEntryID": journal_entry_id,
-                            "FileName": file.filename,
-                            "FilePath": file_path,
-                            "FileType": file.content_type,
-                            "FileSize": len(file_content),
-                            "UploadedByUserID": str(current_user.id),
-                            "UploadTimestamp": datetime.utcnow().isoformat()
-                        }
+                        logger.info(f"Attempting to upload file: {file.filename} ({len(file_content)} bytes) to {bucket_name}/{unique_filename}")
                         
-                        attachment_result = supabase.from_("journalattachments").insert(attachment_insert).execute()
-                        if attachment_result.data:
-                            attachment_ids.append(attachment_result.data[0]['AttachmentID'])
-                        
-                    except Exception as storage_error:
-                        logger.warning(f"Failed to upload file {file.filename}: {storage_error}")
-                        # Continue even if file upload fails
+                        # Upload to Supabase storage
+                        try:
+                            upload_result = supabase.storage.from_(bucket_name).upload(
+                                unique_filename,
+                                file_content,
+                                file_options={"content-type": file.content_type or "application/octet-stream"}
+                            )
+                            
+                            logger.info(f"Upload result for {file.filename}: {upload_result}")
+                            
+                            # Check if upload was successful
+                            # Supabase Python client returns the path on success or raises exception on error
+                            if upload_result:
+                                logger.info(f"✓ File uploaded successfully to {bucket_name}/{unique_filename}")
+                                
+                                # Store the file path (without bucket prefix) in the database
+                                # We'll generate signed URLs dynamically when retrieving attachments
+                                file_storage_path = unique_filename
+                                
+                                # Insert attachment record
+                                attachment_insert = {
+                                    "JournalEntryID": journal_entry_id,
+                                    "FileName": file.filename,
+                                    "FilePath": file_storage_path,  # Store just the path, not the full URL
+                                    "FileType": file.content_type,
+                                    "FileSize": len(file_content),
+                                    "UploadedByUserID": str(current_user.id),
+                                    "UploadTimestamp": datetime.utcnow().isoformat()
+                                }
+                                
+                                attachment_result = supabase.from_("journalattachments").insert(attachment_insert).execute()
+                                
+                                if attachment_result.data:
+                                    attachment_ids.append(attachment_result.data[0]['AttachmentID'])
+                                    logger.info(f"Successfully saved attachment record for {file.filename}")
+                                else:
+                                    logger.error(f"Failed to insert attachment record for {file.filename}")
+                                    upload_errors.append(f"Failed to save record for {file.filename}")
+                            else:
+                                logger.error(f"Upload returned empty result for {file.filename}")
+                                upload_errors.append(f"Upload failed for {file.filename}")
+                                
+                        except Exception as storage_error:
+                            logger.error(f"Storage upload error for {file.filename}: {storage_error}")
+                            upload_errors.append(f"Upload error for {file.filename}: {str(storage_error)}")
+                            
+                    except Exception as file_error:
+                        logger.error(f"File processing error for {file.filename}: {file_error}")
+                        upload_errors.append(f"Processing error for {file.filename}: {str(file_error)}")
+        
+        # Log upload errors if any (but don't fail the entire request)
+        if upload_errors:
+            logger.warning(f"File upload errors occurred: {', '.join(upload_errors)}")
         
         # Log the creation event
         try:

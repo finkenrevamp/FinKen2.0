@@ -281,21 +281,31 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       field: 'accounts',
       headerName: 'Accounts',
       flex: 1,
-      minWidth: 200,
+      minWidth: 250,
       sortable: false,
       filterable: false,
       renderCell: (params: GridRenderCellParams) => {
         const entry = params.row as JournalEntry;
-        const accountNames = entry.lines
-          .map(line => `${line.account_number} - ${line.account_name}`)
-          .join(', ');
+        const debitLines = entry.lines.filter(line => line.type === 'Debit');
+        const creditLines = entry.lines.filter(line => line.type === 'Credit');
+        
         return (
           <Box sx={{ 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis' 
+            py: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
           }}>
-            {accountNames}
+            {debitLines.map((line, idx) => (
+              <Box key={`debit-${idx}`} sx={{ lineHeight: 1.5 }}>
+                {line.account_number} - {line.account_name}
+              </Box>
+            ))}
+            {creditLines.map((line, idx) => (
+              <Box key={`credit-${idx}`} sx={{ lineHeight: 1.5, pl: 4 }}>
+                {line.account_number} - {line.account_name}
+              </Box>
+            ))}
           </Box>
         );
       },
@@ -309,8 +319,30 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       align: 'right',
       renderCell: (params: GridRenderCellParams) => {
         const entry = params.row as JournalEntry;
-        const { totalDebit } = calculateEntryTotals(entry.lines);
-        return formatCurrency(totalDebit.toString());
+        const debitLines = entry.lines.filter(line => line.type === 'Debit');
+        const creditLines = entry.lines.filter(line => line.type === 'Credit');
+        
+        return (
+          <Box sx={{ 
+            py: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+            alignItems: 'flex-end',
+            width: '100%',
+          }}>
+            {debitLines.map((line, idx) => (
+              <Box key={`debit-${idx}`} sx={{ lineHeight: 1.5 }}>
+                {formatCurrency(line.amount)}
+              </Box>
+            ))}
+            {creditLines.map((_, idx) => (
+              <Box key={`credit-${idx}`} sx={{ lineHeight: 1.5 }}>
+                -
+              </Box>
+            ))}
+          </Box>
+        );
       },
     },
     {
@@ -322,8 +354,30 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       align: 'right',
       renderCell: (params: GridRenderCellParams) => {
         const entry = params.row as JournalEntry;
-        const { totalCredit } = calculateEntryTotals(entry.lines);
-        return formatCurrency(totalCredit.toString());
+        const debitLines = entry.lines.filter(line => line.type === 'Debit');
+        const creditLines = entry.lines.filter(line => line.type === 'Credit');
+        
+        return (
+          <Box sx={{ 
+            py: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+            alignItems: 'flex-end',
+            width: '100%',
+          }}>
+            {debitLines.map((_, idx) => (
+              <Box key={`debit-${idx}`} sx={{ lineHeight: 1.5 }}>
+                -
+              </Box>
+            ))}
+            {creditLines.map((line, idx) => (
+              <Box key={`credit-${idx}`} sx={{ lineHeight: 1.5 }}>
+                {formatCurrency(line.amount)}
+              </Box>
+            ))}
+          </Box>
+        );
       },
     },
     {
@@ -456,6 +510,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
               rows={filteredEntries}
               columns={columns}
               getRowId={(row) => row.journal_entry_id}
+              getRowHeight={() => 'auto'}
               slots={{
                 toolbar: GridToolbar,
               }}
@@ -481,6 +536,8 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
                   },
                   '& .MuiDataGrid-cell': {
                     borderBottom: '1px solid #f0f0f0',
+                    display: 'flex',
+                    alignItems: 'center',
                   },
                   '& .MuiDataGrid-row': {
                     '&:hover': {

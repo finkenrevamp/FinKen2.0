@@ -246,6 +246,34 @@ const AccountLedger: React.FC<AccountLedgerProps> = ({ user, onLogout }) => {
       width: 120,
       sortable: true,
       filterable: true,
+      renderCell: (params: GridRenderCellParams) => {
+        const postRef = params.value;
+        // Extract journal entry ID from post_ref (e.g., "JE-123" -> 123)
+        const jeMatch = postRef.match(/JE-(\d+)/);
+        const journalEntryId = jeMatch ? jeMatch[1] : null;
+        
+        if (journalEntryId) {
+          return (
+            <Box
+              sx={{
+                color: 'primary.main',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                '&:hover': {
+                  color: 'primary.dark',
+                },
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/journalize', { state: { openEntryId: parseInt(journalEntryId) } });
+              }}
+            >
+              {postRef}
+            </Box>
+          );
+        }
+        return postRef;
+      },
     },
     {
       field: 'description',

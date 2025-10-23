@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -52,6 +53,7 @@ interface JournalizeProps {
 }
 
 const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
+  const location = useLocation();
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +111,31 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   useEffect(() => {
     fetchJournalEntries();
   }, [fetchJournalEntries]);
+
+  // Handle opening a specific journal entry from navigation state
+  useEffect(() => {
+    const openEntryId = (location.state as any)?.openEntryId;
+    if (openEntryId && journalEntries.length > 0 && !detailsOpen) {
+      // Find and open the specific journal entry
+      const entryToOpen = journalEntries.find(
+        (entry) => entry.journal_entry_id === openEntryId
+      );
+      if (entryToOpen) {
+        // Fetch full details and open dialog
+        const loadEntryDetails = async () => {
+          try {
+            const fullEntry = await journalEntriesService.getJournalEntry(entryToOpen.journal_entry_id);
+            setSelectedEntry(fullEntry);
+            setDetailsOpen(true);
+          } catch (err: any) {
+            console.error('Failed to fetch entry details:', err);
+            setError(err.message || 'Failed to load entry details');
+          }
+        };
+        loadEntryDetails();
+      }
+    }
+  }, [location.state, journalEntries, detailsOpen]);
 
   // Filter entries based on search query
   const filteredEntries = useMemo(() => {

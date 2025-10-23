@@ -692,7 +692,7 @@ async def approve_journal_entry(
         
         supabase.from_("journalentries").update(update_data).eq("JournalEntryID", journal_entry_id).execute()
         
-        # Post to account ledger
+        # Post to account ledger and update account balances
         lines_result = supabase.from_("journalentrylines").select("*").eq("JournalEntryID", journal_entry_id).execute()
         
         for line in lines_result.data:
@@ -706,6 +706,39 @@ async def approve_journal_entry(
                 "PostTimestamp": datetime.utcnow().isoformat()
             }
             supabase.from_("accountledger").insert(ledger_entry).execute()
+            
+            # Update account balance
+            account_id = line.get("AccountID")
+            amount = Decimal(str(line.get("Amount")))
+            line_type = line.get("Type")
+            
+            # Get the account's normal side to determine how to update balance
+            account_result = supabase.from_("chartofaccounts").select("Balance, NormalSide").eq("AccountID", account_id).single().execute()
+            
+            if account_result.data:
+                current_balance = Decimal(str(account_result.data.get("Balance", "0.00")))
+                normal_side = account_result.data.get("NormalSide")
+                
+                # Calculate new balance based on normal side and transaction type
+                # Debit accounts (Assets, Expenses): Debits increase, Credits decrease
+                # Credit accounts (Liabilities, Equity, Revenue): Credits increase, Debits decrease
+                if line_type == "Debit":
+                    if normal_side == "Debit":
+                        new_balance = current_balance + amount
+                    else:  # normal_side == "Credit"
+                        new_balance = current_balance - amount
+                else:  # line_type == "Credit"
+                    if normal_side == "Credit":
+                        new_balance = current_balance + amount
+                    else:  # normal_side == "Debit"
+                        new_balance = current_balance - amount
+                
+                # Update the account balance
+                supabase.from_("chartofaccounts").update({
+                    "Balance": str(new_balance)
+                }).eq("AccountID", account_id).execute()
+                
+                logger.info(f"Updated account {account_id} balance from {current_balance} to {new_balance} (Type: {line_type}, NormalSide: {normal_side})")
         
         # Log the approval event
         try:

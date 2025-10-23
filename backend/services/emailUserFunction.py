@@ -560,3 +560,102 @@ FinKen 2.0 Team
         body=body,
         html_body=html_body
     )
+
+
+def send_journal_entry_notification_email(
+    manager_email: str,
+    manager_name: str,
+    submitter_name: str,
+    journal_entry_id: int,
+    entry_date: str,
+    description: str,
+    total_amount: str
+) -> dict:
+    """
+    Send journal entry notification email to managers
+    
+    Args:
+        manager_email: Email of the manager
+        manager_name: Name of the manager
+        submitter_name: Name of the user who submitted the entry
+        journal_entry_id: ID of the journal entry
+        entry_date: Date of the journal entry
+        description: Description of the journal entry
+        total_amount: Total amount of the journal entry
+        
+    Returns:
+        dict: Response from email service
+    """
+    subject = f"FinKen 2.0 - New Journal Entry #{journal_entry_id} Pending Approval"
+    
+    body = f"""Dear {manager_name},
+
+A new journal entry has been submitted and is pending approval.
+
+Journal Entry Details:
+Entry ID: #{journal_entry_id}
+Submitted By: {submitter_name}
+Entry Date: {entry_date}
+Description: {description}
+Total Amount: ${total_amount}
+Status: Pending
+
+Please review and approve or reject this entry at your earliest convenience.
+
+Best regards,
+FinKen 2.0 Team
+"""
+    
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #1976d2;">New Journal Entry Pending Approval</h2>
+            <p>Dear {manager_name},</p>
+            <p>A new journal entry has been submitted and is pending approval.</p>
+            
+            <div style="background-color: #e3f2fd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #1976d2;">
+                <h3 style="margin-top: 0; color: #1976d2;">Journal Entry Details</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; font-weight: bold; width: 150px;">Entry ID:</td>
+                        <td style="padding: 8px 0;">#{journal_entry_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; font-weight: bold;">Submitted By:</td>
+                        <td style="padding: 8px 0;">{submitter_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; font-weight: bold;">Entry Date:</td>
+                        <td style="padding: 8px 0;">{entry_date}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; font-weight: bold;">Description:</td>
+                        <td style="padding: 8px 0;">{description}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; font-weight: bold;">Total Amount:</td>
+                        <td style="padding: 8px 0; color: #1976d2; font-weight: bold;">${total_amount}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; font-weight: bold;">Status:</td>
+                        <td style="padding: 8px 0;"><span style="background-color: #ff9800; color: white; padding: 4px 12px; border-radius: 3px; font-size: 12px;">Pending</span></td>
+                    </tr>
+                </table>
+            </div>
+            
+            <p>Please review and approve or reject this entry at your earliest convenience.</p>
+            
+            <p>Best regards,<br>FinKen 2.0 Team</p>
+        </body>
+    </html>
+    """
+    
+    return send_email(
+        sender_email="noreply@job-fit-ai.com",
+        sender_name="FinKen 2.0",
+        receiver_email=manager_email,
+        receiver_name=manager_name,
+        subject=subject,
+        body=body,
+        html_body=html_body
+    )

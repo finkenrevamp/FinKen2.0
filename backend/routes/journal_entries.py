@@ -12,9 +12,10 @@ import json
 import uuid
 import os
 
-from services.supabase import get_supabase_client, set_current_user
+from services.supabase import get_supabase_client, get_supabase_service, set_current_user
 from routes.auth import get_current_user_from_token, require_admin
 from models.auth import Profile
+from services.emailUserFunction import send_journal_entry_notification_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -624,6 +625,68 @@ async def create_journal_entry(
             supabase.from_("journal_event_logs").insert(log_entry).execute()
         except Exception as log_error:
             logger.warning(f"Failed to log journal entry creation: {log_error}")
+        
+        # Send email notifications to all managers
+        try:
+            # Get the Manager role ID
+            manager_role_result = supabase.from_("roles").select("RoleID").eq("RoleName", "Manager").single().execute()
+            
+            if manager_role_result.data:
+                manager_role_id = manager_role_result.data["RoleID"]
+                
+                # Get all managers (profiles with Manager role)
+                managers_result = supabase.from_("profiles").select(
+                    "id, Username, FirstName, LastName"
+                ).eq("RoleID", manager_role_id).eq("IsActive", True).execute()
+                
+                if managers_result.data:
+                    submitter_name = f"{current_user.first_name} {current_user.last_name}"
+                    
+                    # Format the total amount for the email
+                    total_amount_formatted = f"{total_debit:,.2f}"
+                    
+                    # Get service client to access auth.users
+                    service_client = get_supabase_service().get_service_client()
+                    
+                    for manager in managers_result.data:
+                        try:
+                            # Get the manager's email from auth.users using service role client
+                            manager_user = service_client.auth.admin.get_user_by_id(str(manager['id']))
+                            
+                            if manager_user and manager_user.user and manager_user.user.email:
+                                manager_email = manager_user.user.email
+                                manager_name = f"{manager['FirstName']} {manager['LastName']}"
+                                
+                                # Send notification email
+                                email_result = send_journal_entry_notification_email(
+                                    manager_email=manager_email,
+                                    manager_name=manager_name,
+                                    submitter_name=submitter_name,
+                                    journal_entry_id=journal_entry_id,
+                                    entry_date=entry_date,
+                                    description=description or "No description provided",
+                                    total_amount=total_amount_formatted
+                                )
+                                
+                                if email_result.get('success'):
+                                    logger.info(f"Successfully sent notification to manager {manager['Username']} ({manager_email})")
+                                else:
+                                    logger.warning(f"Failed to send notification to manager {manager['Username']}: {email_result.get('message')}")
+                            else:
+                                logger.warning(f"Could not retrieve email for manager {manager['Username']}")
+                                
+                        except Exception as manager_email_error:
+                            logger.error(f"Error sending notification to manager {manager.get('Username', 'Unknown')}: {manager_email_error}")
+                            # Continue with other managers even if one fails
+                            continue
+                else:
+                    logger.info("No active managers found to notify")
+            else:
+                logger.warning("Manager role not found in database")
+                
+        except Exception as notification_error:
+            logger.error(f"Error sending manager notifications: {notification_error}")
+            # Don't fail the request if notifications fail
         
         # Fetch and return the created entry
         return await get_journal_entry(journal_entry_id, current_user)

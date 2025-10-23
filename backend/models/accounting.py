@@ -18,7 +18,7 @@ class ChartOfAccounts(BaseModelConfig, TimestampMixin, UserMixin):
     normal_side: str = Field(..., alias="NormalSide")  # "Debit" or "Credit"
     category: str = Field(..., alias="Category")
     subcategory: Optional[str] = Field(None, alias="Subcategory")
-    initial_balance: Decimal = Field(default=Decimal("0.00"), alias="InitialBalance")
+    initial_balance: Decimal = Field(default=Decimal("0.00"), alias="Balance")
     display_order: Optional[int] = Field(None, alias="DisplayOrder")
     statement_type: Optional[str] = Field(None, alias="StatementType")
     is_active: bool = Field(default=True, alias="IsActive")

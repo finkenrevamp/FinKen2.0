@@ -34,7 +34,7 @@ CREATE TABLE public.chartofaccounts (
   NormalSide text NOT NULL,
   Category text NOT NULL,
   Subcategory text,
-  InitialBalance numeric NOT NULL DEFAULT 0.00,
+  Balance numeric NOT NULL DEFAULT 0.00,
   DisplayOrder integer,
   StatementType text,
   IsActive boolean NOT NULL DEFAULT true,

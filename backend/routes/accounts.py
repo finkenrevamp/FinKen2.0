@@ -162,7 +162,7 @@ async def create_account(
             "NormalSide": account.normal_side,
             "Category": account.category,
             "Subcategory": account.subcategory,
-            "InitialBalance": str(account.initial_balance),
+            "Balance": str(account.initial_balance),
             "DisplayOrder": account.display_order,
             "StatementType": account.statement_type,
             "CreatedByUserID": str(current_user.id),
@@ -264,7 +264,7 @@ async def update_account(
             update_data["Subcategory"] = account_update.subcategory
         
         if account_update.initial_balance is not None:
-            update_data["InitialBalance"] = str(account_update.initial_balance)
+            update_data["Balance"] = str(account_update.initial_balance)
         
         if account_update.display_order is not None:
             update_data["DisplayOrder"] = account_update.display_order
@@ -338,7 +338,7 @@ async def deactivate_account(
             }
         
         # Check if account has a non-zero balance
-        initial_balance = Decimal(str(existing.data.get("InitialBalance", "0.00")))
+        initial_balance = Decimal(str(existing.data.get("Balance", "0.00")))
         if initial_balance != Decimal("0.00"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -396,7 +396,7 @@ async def get_account_ledger(
             )
         
         account = account_result.data
-        initial_balance = Decimal(str(account.get("InitialBalance", "0.00")))
+        initial_balance = Decimal(str(account.get("Balance", "0.00")))
         normal_side = account.get("NormalSide", "Debit")
         
         # Build query for ledger entries

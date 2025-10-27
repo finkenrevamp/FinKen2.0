@@ -452,7 +452,7 @@ const AccountLedger: React.FC<AccountLedgerProps> = ({ user, onLogout }) => {
             <DataGrid
               rows={filteredEntries}
               columns={columns}
-              getRowId={(row) => row.ledger_id || `opening-${row.post_ref}`}
+              getRowId={(row) => row.ledger_id}
               slots={{
                 toolbar: GridToolbar,
               }}

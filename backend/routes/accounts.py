@@ -396,7 +396,7 @@ async def get_account_ledger(
             )
         
         account = account_result.data
-        initial_balance = Decimal(str(account.get("Balance", "0.00")))
+        current_balance = Decimal(str(account.get("Balance", "0.00")))
         normal_side = account.get("NormalSide", "Debit")
         
         # Build query for ledger entries
@@ -417,9 +417,29 @@ async def get_account_ledger(
         
         result = query.execute()
         
+        # Calculate opening balance by backing out all transactions from current balance
+        # This gives us the true initial balance before any ledger entries
+        total_debit = Decimal("0.00")
+        total_credit = Decimal("0.00")
+        
+        # Get ALL ledger entries (without date filters) to calculate the true opening balance
+        all_entries_result = supabase.from_("accountledger").select(
+            "Debit, Credit"
+        ).eq("AccountID", account_id).execute()
+        
+        for entry in all_entries_result.data:
+            total_debit += Decimal(str(entry.get("Debit", "0.00")))
+            total_credit += Decimal(str(entry.get("Credit", "0.00")))
+        
+        # Calculate opening balance: current balance minus net effect of all transactions
+        if normal_side == "Debit":
+            opening_balance = current_balance - (total_debit - total_credit)
+        else:  # Credit
+            opening_balance = current_balance - (total_credit - total_debit)
+        
         # Calculate running balance
         ledger_entries = []
-        running_balance = initial_balance
+        running_balance = opening_balance
         
         for entry in result.data:
             debit = Decimal(str(entry.get("Debit", "0.00")))
@@ -441,36 +461,6 @@ async def get_account_ledger(
                 "balance": str(running_balance),
                 "post_timestamp": entry.get("PostTimestamp")
             })
-        
-        # Add initial balance as first entry only if:
-        # 1. No date filters are applied, OR
-        # 2. The account creation date falls within the date range
-        should_show_opening = False
-        account_created_date = str(account.get("DateCreated", ""))[:10]  # Get date portion only
-        
-        if not start_date and not end_date:
-            # No filters, always show opening if there are entries or non-zero balance
-            should_show_opening = (ledger_entries or initial_balance != Decimal("0.00"))
-        else:
-            # Check if opening date falls within the filtered range
-            if start_date and account_created_date < start_date:
-                should_show_opening = False
-            elif end_date and account_created_date > end_date:
-                should_show_opening = False
-            else:
-                should_show_opening = (ledger_entries or initial_balance != Decimal("0.00"))
-        
-        if should_show_opening:
-            return [{
-                "ledger_id": None,
-                "date": account.get("DateCreated"),
-                "post_ref": "Opening",
-                "description": "Initial Balance",
-                "debit": str(initial_balance) if normal_side == "Debit" and initial_balance > 0 else "0.00",
-                "credit": str(abs(initial_balance)) if normal_side == "Credit" and initial_balance > 0 else "0.00",
-                "balance": str(initial_balance),
-                "post_timestamp": account.get("DateCreated")
-            }] + ledger_entries
         
         return ledger_entries
         

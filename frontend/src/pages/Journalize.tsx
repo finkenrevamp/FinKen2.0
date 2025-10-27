@@ -37,6 +37,8 @@ import {
   Cancel as CancelIcon,
   Pending as PendingIcon,
   AttachFile as AttachFileIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import Header from '../components/Header';
 import NewJournalEntryDialog from '../components/NewJournalEntryDialog';
@@ -71,11 +73,18 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   // New entry dialog state
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   
+  // Edit entry dialog state
+  const [editEntryOpen, setEditEntryOpen] = useState(false);
+  
   // Approval/Rejection state
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  
+  // Delete state
+  const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Fetch journal entries
   const fetchJournalEntries = useCallback(async () => {
@@ -274,7 +283,54 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
     }
   };
 
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedEntry) return;
+    
+    try {
+      setDeleting(true);
+      setError(null);
+      
+      await journalEntriesService.deleteJournalEntry(selectedEntry.journal_entry_id);
+      
+      // Refresh entries and close dialogs
+      await fetchJournalEntries();
+      setDeleteDialogOpen(false);
+      setDetailsOpen(false);
+      setSelectedEntry(null);
+    } catch (err: any) {
+      console.error('Failed to delete journal entry:', err);
+      setError(err.message || 'Failed to delete journal entry');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditClick = () => {
+    setDetailsOpen(false); // Close details dialog
+    setEditEntryOpen(true); // Open edit dialog
+  };
+
+  const handleEditSuccess = async () => {
+    await fetchJournalEntries();
+    setEditEntryOpen(false);
+    setSelectedEntry(null);
+  };
+
   const canApproveOrReject = user.role === 'Manager' || user.role === 'Administrator';
+  
+  // Check if current user can edit/delete the selected entry
+  const canEditOrDelete = selectedEntry && (
+    selectedEntry.created_by_username === user.username || 
+    user.role === 'Administrator'
+  ) && selectedEntry.status === 'Pending';
 
   const columns: GridColDef[] = useMemo(() => [
     {
@@ -831,7 +887,31 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
         </DialogContent>
         <DialogActions>
           <Box sx={{ display: 'flex', gap: 2, width: '100%', justifyContent: 'space-between' }}>
-            <Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {/* Edit and Delete buttons for entry creator or administrator */}
+              {canEditOrDelete && (
+                <>
+                  <Button
+                    onClick={handleEditClick}
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<EditIcon />}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    onClick={handleDeleteClick}
+                    variant="outlined"
+                    color="error"
+                    disabled={deleting}
+                    startIcon={<DeleteIcon />}
+                  >
+                    Delete
+                  </Button>
+                </>
+              )}
+              
+              {/* Approve/Reject buttons for managers and administrators */}
               {selectedEntry && selectedEntry.status === 'Pending' && canApproveOrReject && (
                 <>
                   <Button
@@ -849,7 +929,6 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
                     color="error"
                     disabled={rejecting}
                     startIcon={<CancelIcon />}
-                    sx={{ ml: 1 }}
                   >
                     Reject
                   </Button>
@@ -894,6 +973,45 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
         </DialogActions>
       </Dialog>
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel} maxWidth="sm" fullWidth>
+        <DialogTitle>Delete Journal Entry</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom sx={{ mt: 1 }}>
+            Are you sure you want to delete this journal entry? This action cannot be undone.
+          </Typography>
+          {selectedEntry && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Entry #{selectedEntry.journal_entry_id}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Date: {formatDate(selectedEntry.entry_date)}
+              </Typography>
+              {selectedEntry.description && (
+                <Typography variant="body2" color="text.secondary">
+                  Description: {selectedEntry.description}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            variant="contained"
+            color="error"
+            disabled={deleting}
+            startIcon={<DeleteIcon />}
+          >
+            {deleting ? <CircularProgress size={24} /> : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* New Entry Dialog */}
       <NewJournalEntryDialog
         open={newEntryOpen}
@@ -902,6 +1020,20 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
           fetchJournalEntries();
         }}
       />
+
+      {/* Edit Entry Dialog */}
+      {selectedEntry && (
+        <NewJournalEntryDialog
+          open={editEntryOpen}
+          onClose={() => {
+            setEditEntryOpen(false);
+            setSelectedEntry(null);
+          }}
+          onSuccess={handleEditSuccess}
+          editMode={true}
+          existingEntry={selectedEntry}
+        />
+      )}
     </Box>
   );
 };

@@ -182,12 +182,35 @@ class JournalEntriesService {
    */
   async updateJournalEntry(
     journalEntryId: number,
-    entryData: UpdateJournalEntryRequest
+    entryData: UpdateJournalEntryRequest & { files?: File[] }
   ): Promise<JournalEntry> {
     try {
+      const formData = new FormData();
+      
+      // Add entry data
+      if (entryData.entry_date !== undefined) {
+        formData.append('entry_date', entryData.entry_date);
+      }
+      if (entryData.description !== undefined) {
+        formData.append('description', entryData.description);
+      }
+      if (entryData.is_adjusting_entry !== undefined) {
+        formData.append('is_adjusting_entry', String(entryData.is_adjusting_entry));
+      }
+      if (entryData.lines) {
+        formData.append('lines', JSON.stringify(entryData.lines));
+      }
+      
+      // Add files if provided
+      if (entryData.files && entryData.files.length > 0) {
+        entryData.files.forEach((file) => {
+          formData.append('files', file);
+        });
+      }
+      
       const response = await apiClient.patch<JournalEntry>(
         `${this.basePath}/${journalEntryId}`,
-        entryData
+        formData
       );
       return response.data;
     } catch (error) {

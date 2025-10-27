@@ -29,12 +29,14 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import CloseIcon from '@mui/icons-material/Close';
 import type { AccountData } from '../services/accountsService';
 import { accountsService } from '../services/accountsService';
-import { journalEntriesService } from '../services/journalEntriesService';
+import { journalEntriesService, type JournalEntry } from '../services/journalEntriesService';
 
 interface NewJournalEntryDialogProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  editMode?: boolean;
+  existingEntry?: JournalEntry;
 }
 
 interface EntryLine {
@@ -50,6 +52,8 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
   open,
   onClose,
   onSuccess,
+  editMode = false,
+  existingEntry,
 }) => {
   const [entryDate, setEntryDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -72,6 +76,38 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
       fetchAccounts();
     }
   }, [open]);
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editMode && existingEntry && open) {
+      setEntryDate(existingEntry.entry_date);
+      setDescription(existingEntry.description || '');
+      setIsAdjustingEntry(existingEntry.is_adjusting_entry);
+      
+      // Convert existing lines to the form format
+      const formLines: EntryLine[] = existingEntry.lines.map((line, index) => ({
+        id: `${line.line_id || index}`,
+        account_id: line.account_id,
+        type: line.type,
+        amount: line.amount,
+      }));
+      setLines(formLines);
+      
+      // Note: We don't load existing files/attachments for editing
+      // User can only add new attachments when editing
+      setFiles([]);
+    } else if (!editMode && open) {
+      // Reset form for new entry
+      setEntryDate(new Date().toISOString().split('T')[0]);
+      setDescription('');
+      setIsAdjustingEntry(false);
+      setLines([
+        { id: '1', account_id: '', type: 'Debit', amount: '' },
+        { id: '2', account_id: '', type: 'Credit', amount: '' },
+      ]);
+      setFiles([]);
+    }
+  }, [editMode, existingEntry, open]);
 
   const fetchAccounts = async () => {
     try {
@@ -225,7 +261,16 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
         files: files.length > 0 ? files : undefined,
       };
 
-      await journalEntriesService.createJournalEntry(entryData);
+      if (editMode && existingEntry) {
+        // Update existing entry
+        await journalEntriesService.updateJournalEntry(
+          existingEntry.journal_entry_id,
+          entryData
+        );
+      } else {
+        // Create new entry
+        await journalEntriesService.createJournalEntry(entryData);
+      }
 
       // Reset form
       setEntryDate(new Date().toISOString().split('T')[0]);
@@ -240,11 +285,23 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      console.error('Failed to create journal entry:', err);
-      setError(err.message || 'Failed to create journal entry');
+      console.error(`Failed to ${editMode ? 'update' : 'create'} journal entry:`, err);
+      setError(err.message || `Failed to ${editMode ? 'update' : 'create'} journal entry`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReset = () => {
+    setEntryDate(new Date().toISOString().split('T')[0]);
+    setDescription('');
+    setIsAdjustingEntry(false);
+    setLines([
+      { id: '1', account_id: '', type: 'Debit', amount: '' },
+      { id: '2', account_id: '', type: 'Credit', amount: '' },
+    ]);
+    setFiles([]);
+    setError(null);
   };
 
   const handleClose = () => {
@@ -261,7 +318,9 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h5">Create New Journal Entry</Typography>
+          <Typography variant="h5">
+            {editMode ? `Edit Journal Entry #${existingEntry?.journal_entry_id}` : 'Create New Journal Entry'}
+          </Typography>
           <IconButton onClick={handleClose} disabled={loading}>
             <CloseIcon />
           </IconButton>
@@ -454,10 +513,11 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
             {/* File Attachments */}
             <Box>
               <Typography variant="h6" gutterBottom>
-                Attachments (Optional)
+                {editMode ? 'Add New Attachments (Optional)' : 'Attachments (Optional)'}
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Allowed file types: PDF, Word, Excel, CSV, JPG, PNG
+                {editMode && ' (Existing attachments will be preserved)'}
               </Typography>
 
               <Button
@@ -495,16 +555,26 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={loading || loadingAccounts || !isBalanced}
-        >
-          {loading ? <CircularProgress size={24} /> : 'Create Entry'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'space-between' }}>
+          {!editMode && (
+            <Button onClick={handleReset} disabled={loading || loadingAccounts} color="warning">
+              Reset Form
+            </Button>
+          )}
+          {editMode && <Box />}
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button onClick={handleClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={loading || loadingAccounts || !isBalanced}
+            >
+              {loading ? <CircularProgress size={24} /> : editMode ? 'Update Entry' : 'Create Entry'}
+            </Button>
+          </Box>
+        </Box>
       </DialogActions>
     </Dialog>
   );

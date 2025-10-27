@@ -920,3 +920,304 @@ async def reject_journal_entry(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while rejecting the journal entry: {str(e)}"
         )
+
+@router.delete("/{journal_entry_id}")
+async def delete_journal_entry(
+    journal_entry_id: int,
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Delete a journal entry (Creator can delete their own pending entries, Administrators can delete any pending entry)
+    Only pending entries can be deleted - approved entries cannot be deleted as they've been posted to the ledger
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Get user role
+        role_result = supabase.from_("profiles").select("roles(RoleName)").eq("id", str(current_user.id)).single().execute()
+        user_role = role_result.data.get("roles", {}).get("RoleName") if role_result.data else None
+        
+        # Fetch the journal entry
+        entry_result = supabase.from_("journalentries").select("*").eq("JournalEntryID", journal_entry_id).single().execute()
+        
+        if not entry_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Journal entry with ID {journal_entry_id} not found"
+            )
+        
+        entry_data = entry_result.data
+        
+        # Check permissions: Creator can delete their own entries, Administrator can delete any
+        is_creator = str(entry_data.get("CreatedByUserID")) == str(current_user.id)
+        is_admin = user_role == "Administrator"
+        
+        if not is_creator and not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete your own journal entries"
+            )
+        
+        # Only allow deletion of pending entries
+        if entry_data.get("Status") != "Pending":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot delete a {entry_data.get('Status')} journal entry. Only pending entries can be deleted."
+            )
+        
+        # Delete attachments from storage
+        attachments_result = supabase.from_("journalattachments").select("FilePath").eq("JournalEntryID", journal_entry_id).execute()
+        
+        bucket_name = "documents"
+        for attachment in attachments_result.data:
+            file_path = attachment.get("FilePath")
+            try:
+                # Remove from storage
+                supabase.storage.from_(bucket_name).remove([file_path])
+                logger.info(f"Deleted file from storage: {file_path}")
+            except Exception as storage_error:
+                logger.warning(f"Failed to delete file from storage: {file_path}, error: {storage_error}")
+        
+        # Delete attachment records
+        supabase.from_("journalattachments").delete().eq("JournalEntryID", journal_entry_id).execute()
+        
+        # Delete journal entry lines
+        supabase.from_("journalentrylines").delete().eq("JournalEntryID", journal_entry_id).execute()
+        
+        # Delete the journal entry
+        supabase.from_("journalentries").delete().eq("JournalEntryID", journal_entry_id).execute()
+        
+        # Log the deletion event
+        try:
+            log_entry = {
+                "UserID": str(current_user.id),
+                "Timestamp": datetime.utcnow().isoformat(),
+                "ActionType": "DELETE",
+                "TableName": "journalentries",
+                "RecordID": str(journal_entry_id),
+                "BeforeValue": json.dumps({
+                    "journal_entry_id": journal_entry_id,
+                    "status": entry_data.get("Status"),
+                    "created_by": entry_data.get("CreatedByUserID")
+                })
+            }
+            supabase.from_("journal_event_logs").insert(log_entry).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to log deletion: {log_error}")
+        
+        return {"message": f"Journal entry {journal_entry_id} deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete journal entry error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while deleting the journal entry: {str(e)}"
+        )
+
+@router.patch("/{journal_entry_id}")
+async def update_journal_entry(
+    journal_entry_id: int,
+    entry_date: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    is_adjusting_entry: Optional[bool] = Form(None),
+    lines: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Update a journal entry (Creator can edit their own pending entries, Administrators can edit any pending entry)
+    Only pending entries can be edited - approved/rejected entries cannot be modified
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Get user role
+        role_result = supabase.from_("profiles").select("roles(RoleName)").eq("id", str(current_user.id)).single().execute()
+        user_role = role_result.data.get("roles", {}).get("RoleName") if role_result.data else None
+        
+        # Fetch the journal entry
+        entry_result = supabase.from_("journalentries").select("*").eq("JournalEntryID", journal_entry_id).single().execute()
+        
+        if not entry_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Journal entry with ID {journal_entry_id} not found"
+            )
+        
+        entry_data = entry_result.data
+        
+        # Check permissions: Creator can edit their own entries, Administrator can edit any
+        is_creator = str(entry_data.get("CreatedByUserID")) == str(current_user.id)
+        is_admin = user_role == "Administrator"
+        
+        if not is_creator and not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only edit your own journal entries"
+            )
+        
+        # Only allow editing of pending entries
+        if entry_data.get("Status") != "Pending":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot edit a {entry_data.get('Status')} journal entry. Only pending entries can be edited."
+            )
+        
+        # Prepare update data
+        update_data = {}
+        
+        if entry_date is not None:
+            update_data["EntryDate"] = entry_date
+        
+        if description is not None:
+            update_data["Description"] = description
+        
+        if is_adjusting_entry is not None:
+            update_data["IsAdjustingEntry"] = is_adjusting_entry
+        
+        # Update journal entry basic info if any updates provided
+        if update_data:
+            supabase.from_("journalentries").update(update_data).eq("JournalEntryID", journal_entry_id).execute()
+        
+        # Update lines if provided
+        if lines:
+            try:
+                lines_data = json.loads(lines)
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid lines data format"
+                )
+            
+            # Validate lines data
+            if len(lines_data) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="At least one debit and one credit line are required"
+                )
+            
+            # Calculate totals and validate balance
+            total_debit = Decimal('0.00')
+            total_credit = Decimal('0.00')
+            
+            for line in lines_data:
+                if not all(k in line for k in ['account_id', 'type', 'amount']):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Each line must have account_id, type, and amount"
+                    )
+                
+                amount = Decimal(str(line['amount']))
+                if amount <= 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Line amounts must be greater than zero"
+                    )
+                
+                if line['type'] == 'Debit':
+                    total_debit += amount
+                elif line['type'] == 'Credit':
+                    total_credit += amount
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Line type must be 'Debit' or 'Credit'"
+                    )
+            
+            # Check if debits equal credits
+            if total_debit != total_credit:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Debits (${total_debit}) must equal credits (${total_credit})"
+                )
+            
+            # Delete existing lines
+            supabase.from_("journalentrylines").delete().eq("JournalEntryID", journal_entry_id).execute()
+            
+            # Insert new lines
+            lines_insert = []
+            for line in lines_data:
+                lines_insert.append({
+                    "JournalEntryID": journal_entry_id,
+                    "AccountID": line['account_id'],
+                    "Type": line['type'],
+                    "Amount": str(line['amount'])
+                })
+            
+            supabase.from_("journalentrylines").insert(lines_insert).execute()
+        
+        # Handle file uploads if provided
+        if files:
+            bucket_name = "documents"
+            
+            for file in files:
+                if file.filename:
+                    try:
+                        # Validate file type
+                        file_ext = os.path.splitext(file.filename)[1].lower()
+                        if file_ext not in ALLOWED_EXTENSIONS:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"File type {file_ext} is not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
+                            )
+                        
+                        # Generate unique filename
+                        unique_filename = f"{journal_entry_id}/{uuid.uuid4()}{file_ext}"
+                        
+                        # Read file content
+                        file_content = await file.read()
+                        
+                        # Upload to Supabase storage
+                        upload_result = supabase.storage.from_(bucket_name).upload(
+                            unique_filename,
+                            file_content,
+                            file_options={"content-type": file.content_type or "application/octet-stream"}
+                        )
+                        
+                        if upload_result:
+                            # Insert attachment record
+                            attachment_insert = {
+                                "JournalEntryID": journal_entry_id,
+                                "FileName": file.filename,
+                                "FilePath": unique_filename,
+                                "FileType": file.content_type,
+                                "FileSize": len(file_content),
+                                "UploadedByUserID": str(current_user.id),
+                                "UploadTimestamp": datetime.utcnow().isoformat()
+                            }
+                            
+                            supabase.from_("journalattachments").insert(attachment_insert).execute()
+                            logger.info(f"Successfully added attachment {file.filename} to journal entry {journal_entry_id}")
+                        
+                    except Exception as file_error:
+                        logger.error(f"File upload error for {file.filename}: {file_error}")
+                        # Continue with other files even if one fails
+        
+        # Log the update event
+        try:
+            log_entry = {
+                "UserID": str(current_user.id),
+                "Timestamp": datetime.utcnow().isoformat(),
+                "ActionType": "UPDATE",
+                "TableName": "journalentries",
+                "RecordID": str(journal_entry_id),
+                "BeforeValue": json.dumps(entry_data, default=str),
+                "AfterValue": json.dumps(update_data, default=str)
+            }
+            supabase.from_("journal_event_logs").insert(log_entry).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to log update: {log_error}")
+        
+        # Return updated entry
+        return await get_journal_entry(journal_entry_id, current_user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update journal entry error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while updating the journal entry: {str(e)}"
+        )

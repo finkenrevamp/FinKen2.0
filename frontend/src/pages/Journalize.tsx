@@ -39,7 +39,11 @@ import {
   AttachFile as AttachFileIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
+  CalendarMonth as CalendarMonthIcon,
 } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import Header from '../components/Header';
 import NewJournalEntryDialog from '../components/NewJournalEntryDialog';
 import type { User } from '../types/auth';
@@ -89,6 +93,10 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   // Delete state
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Calendar popup state
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
   // Fetch journal entries
   const fetchJournalEntries = useCallback(async () => {
@@ -486,6 +494,29 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       <Header user={user} onLogout={onLogout} />
 
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4, pt: 10 }}>
+        {/* Calendar Button - Top Left */}
+        <Box sx={{ position: 'absolute', top: 80, left: 20, zIndex: 1 }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<CalendarMonthIcon />}
+            onClick={() => setCalendarOpen(true)}
+            sx={{ 
+              bgcolor: 'background.paper',
+              boxShadow: 2,
+              '&:hover': {
+                boxShadow: 4,
+              }
+            }}
+          >
+            {selectedCalendarDate.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric', 
+              year: 'numeric' 
+            })}
+          </Button>
+        </Box>
+
         {/* Header Section */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
           <Box>
@@ -1042,6 +1073,60 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
           existingEntry={selectedEntry}
         />
       )}
+
+      {/* Calendar Popup Dialog */}
+      <Dialog
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CalendarMonthIcon />
+            <Typography variant="h6">Calendar</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <DateCalendar
+              value={selectedCalendarDate}
+              onChange={(newDate) => {
+                if (newDate) {
+                  setSelectedCalendarDate(newDate);
+                }
+              }}
+              sx={{
+                '& .MuiPickersDay-root': {
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
+                  },
+                },
+              }}
+            />
+          </LocalizationProvider>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Selected Date:
+            </Typography>
+            <Typography variant="h6">
+              {selectedCalendarDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedCalendarDate(new Date())}>
+            Today
+          </Button>
+          <Button onClick={() => setCalendarOpen(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

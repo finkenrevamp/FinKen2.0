@@ -331,7 +331,9 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
     setSelectedEntry(null);
   };
 
-  const canApproveOrReject = user.role === 'Manager' || user.role === 'Administrator';
+  const canApproveOrReject = (user.role === 'Manager' || user.role === 'Administrator') 
+    && selectedEntry 
+    && selectedEntry.created_by_username !== user.username;
   
   // Check if current user can edit/delete the selected entry
   const canEditOrDelete = selectedEntry && (

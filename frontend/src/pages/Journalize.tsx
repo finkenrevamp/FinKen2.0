@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -56,9 +56,13 @@ interface JournalizeProps {
 
 const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track if we've already processed the navigation state to prevent reopening
+  const processedOpenEntryIdRef = React.useRef<number | null>(null);
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,27 +128,23 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   // Handle opening a specific journal entry from navigation state
   useEffect(() => {
     const openEntryId = (location.state as any)?.openEntryId;
-    if (openEntryId && journalEntries.length > 0 && !detailsOpen) {
+    if (openEntryId && journalEntries.length > 0 && processedOpenEntryIdRef.current !== openEntryId) {
+      // Mark this entry ID as processed
+      processedOpenEntryIdRef.current = openEntryId;
+      
+      // Clear navigation state immediately to prevent re-triggering
+      navigate(location.pathname, { replace: true, state: {} });
+      
       // Find and open the specific journal entry
       const entryToOpen = journalEntries.find(
         (entry) => entry.journal_entry_id === openEntryId
       );
       if (entryToOpen) {
-        // Fetch full details and open dialog
-        const loadEntryDetails = async () => {
-          try {
-            const fullEntry = await journalEntriesService.getJournalEntry(entryToOpen.journal_entry_id);
-            setSelectedEntry(fullEntry);
-            setDetailsOpen(true);
-          } catch (err: any) {
-            console.error('Failed to fetch entry details:', err);
-            setError(err.message || 'Failed to load entry details');
-          }
-        };
-        loadEntryDetails();
+        // Use the same approach as handleRowClick
+        handleRowClick(entryToOpen);
       }
     }
-  }, [location.state, journalEntries, detailsOpen]);
+  }, [location.state, journalEntries]);
 
   // Filter entries based on search query
   const filteredEntries = useMemo(() => {
@@ -238,8 +238,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       
       // Refresh entries and close dialog
       await fetchJournalEntries();
-      setDetailsOpen(false);
-      setSelectedEntry(null);
+      handleCloseDetails();
     } catch (err: any) {
       console.error('Failed to approve journal entry:', err);
       setError(err.message || 'Failed to approve journal entry');
@@ -273,8 +272,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       await fetchJournalEntries();
       setRejectDialogOpen(false);
       setRejectionReason('');
-      setDetailsOpen(false);
-      setSelectedEntry(null);
+      handleCloseDetails();
     } catch (err: any) {
       console.error('Failed to reject journal entry:', err);
       setError(err.message || 'Failed to reject journal entry');
@@ -303,8 +301,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
       // Refresh entries and close dialogs
       await fetchJournalEntries();
       setDeleteDialogOpen(false);
-      setDetailsOpen(false);
-      setSelectedEntry(null);
+      handleCloseDetails();
     } catch (err: any) {
       console.error('Failed to delete journal entry:', err);
       setError(err.message || 'Failed to delete journal entry');

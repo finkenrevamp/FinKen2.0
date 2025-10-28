@@ -492,10 +492,11 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
             <Typography variant="h3" component="h1" gutterBottom>
               Journal Entries
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Create and manage journal entries for your accounting records
-            </Typography>
-          </Box>
+          <Typography variant="body1" color="text.secondary">
+            Create and manage journal entries for your accounting records
+          </Typography>
+        </Box>
+        {user.role !== 'Administrator' && (
           <Button
             variant="contained"
             color="primary"
@@ -506,6 +507,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
           >
             New Entry
           </Button>
+        )}
         </Box>
 
         {/* Search and Filter Bar */}

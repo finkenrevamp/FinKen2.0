@@ -424,73 +424,82 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {lines.map((line) => {
-                      const availableAccounts = getAvailableAccounts(line.id);
-                      // Check if the currently selected account is still available (or is the current line's account)
-                      const currentAccount = accounts.find(acc => acc.account_id === line.account_id);
-                      const accountOptions = currentAccount && !availableAccounts.includes(currentAccount)
-                        ? [currentAccount, ...availableAccounts]
-                        : availableAccounts;
-                      
-                      return (
-                        <TableRow key={line.id}>
-                          <TableCell>
-                            <TextField
-                              select
-                              value={line.account_id}
-                              onChange={(e) =>
-                                handleLineChange(line.id, 'account_id', Number(e.target.value))
-                              }
-                              fullWidth
-                              size="small"
-                              required
-                            >
-                              <MenuItem value="">
-                                <em>Select an account</em>
-                              </MenuItem>
-                              {accountOptions.map((account) => (
-                                <MenuItem key={account.account_id} value={account.account_id}>
-                                  {account.account_number} - {account.account_name}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                          </TableCell>
-                          <TableCell>{line.type}</TableCell>
-                          <TableCell>
-                            <TextField
-                              type="number"
-                              value={line.amount}
-                              onChange={(e) =>
-                                handleLineChange(line.id, 'amount', e.target.value)
-                              }
-                              fullWidth
-                              size="small"
-                              required
-                              inputProps={{ min: 0, step: 0.01 }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {line.type === 'Debit' && line.amount
-                              ? formatCurrency(line.amount)
-                              : '-'}
-                          </TableCell>
-                          <TableCell align="right">
-                            {line.type === 'Credit' && line.amount
-                              ? formatCurrency(line.amount)
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveLine(line.id)}
-                              color="error"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {[...lines]
+                      .sort((a, b) => {
+                        // Sort debits first, then credits
+                        if (a.type === 'Debit' && b.type === 'Credit') return -1;
+                        if (a.type === 'Credit' && b.type === 'Debit') return 1;
+                        return 0;
+                      })
+                      .map((line) => {
+                        const availableAccounts = getAvailableAccounts(line.id);
+                        // Check if the currently selected account is still available (or is the current line's account)
+                        const currentAccount = accounts.find(acc => acc.account_id === line.account_id);
+                        const accountOptions = currentAccount && !availableAccounts.includes(currentAccount)
+                          ? [currentAccount, ...availableAccounts]
+                          : availableAccounts;
+                        
+                        return (
+                          <TableRow key={line.id}>
+                            <TableCell>
+                              <Box sx={{ pl: line.type === 'Credit' ? 4 : 0 }}>
+                                <TextField
+                                  select
+                                  value={line.account_id}
+                                  onChange={(e) =>
+                                    handleLineChange(line.id, 'account_id', Number(e.target.value))
+                                  }
+                                  fullWidth
+                                  size="small"
+                                  required
+                                >
+                                  <MenuItem value="">
+                                    <em>Select an account</em>
+                                  </MenuItem>
+                                  {accountOptions.map((account) => (
+                                    <MenuItem key={account.account_id} value={account.account_id}>
+                                      {account.account_number} - {account.account_name}
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
+                              </Box>
+                            </TableCell>
+                            <TableCell>{line.type}</TableCell>
+                            <TableCell>
+                              <TextField
+                                type="number"
+                                value={line.amount}
+                                onChange={(e) =>
+                                  handleLineChange(line.id, 'amount', e.target.value)
+                                }
+                                fullWidth
+                                size="small"
+                                required
+                                inputProps={{ min: 0, step: 0.01 }}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              {line.type === 'Debit' && line.amount
+                                ? formatCurrency(line.amount)
+                                : '-'}
+                            </TableCell>
+                            <TableCell align="right">
+                              {line.type === 'Credit' && line.amount
+                                ? formatCurrency(line.amount)
+                                : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveLine(line.id)}
+                                color="error"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     <TableRow sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>
                       <TableCell colSpan={3}>
                         <strong>Total</strong>

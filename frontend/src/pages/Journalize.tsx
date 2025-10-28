@@ -555,7 +555,7 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
                 variant="outlined"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by ID, description, creator, or status..."
+                placeholder="Search by description or creator"
               />
             </Box>
             <Box sx={{ flex: '0 1 150px' }}>

@@ -443,7 +443,9 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
       sortable: true,
       filterable: true,
       renderCell: (params: GridRenderCellParams) => {
-        return new Date(params.value).toLocaleDateString();
+        // Parse date manually to avoid timezone issues
+        const [year, month, day] = params.value.split('T')[0].split('-').map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString();
       },
     },
     {

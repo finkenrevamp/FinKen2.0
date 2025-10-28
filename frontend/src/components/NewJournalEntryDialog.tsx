@@ -192,6 +192,14 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  const formatCurrency = (value: string | number): string => {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(num);
+  };
+
   const calculateTotals = () => {
     const totalDebit = lines
       .filter((line) => line.type === 'Debit')
@@ -229,9 +237,16 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
       }
     }
 
+    // Check for duplicate accounts
+    const accountIds = lines.map(line => line.account_id).filter(id => id !== '');
+    const uniqueAccountIds = new Set(accountIds);
+    if (accountIds.length !== uniqueAccountIds.size) {
+      return 'Each account can only be used once in a journal entry';
+    }
+
     const { totalDebit, totalCredit } = calculateTotals();
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      return `Debits ($${totalDebit.toFixed(2)}) must equal credits ($${totalCredit.toFixed(2)})`;
+      return `Debits (${formatCurrency(totalDebit)}) must equal credits (${formatCurrency(totalCredit)})`;
     }
 
     return null;
@@ -313,6 +328,15 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
 
   const { totalDebit, totalCredit } = calculateTotals();
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+
+  // Get available accounts for a specific line (excluding already selected accounts)
+  const getAvailableAccounts = (currentLineId: string) => {
+    const selectedAccountIds = lines
+      .filter(line => line.id !== currentLineId && line.account_id !== '')
+      .map(line => line.account_id);
+    
+    return accounts.filter(account => !selectedAccountIds.includes(account.account_id));
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
@@ -400,7 +424,15 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {lines.map((line) => (
+                    {lines.map((line) => {
+                      const availableAccounts = getAvailableAccounts(line.id);
+                      // Check if the currently selected account is still available (or is the current line's account)
+                      const currentAccount = accounts.find(acc => acc.account_id === line.account_id);
+                      const accountOptions = currentAccount && !availableAccounts.includes(currentAccount)
+                        ? [currentAccount, ...availableAccounts]
+                        : availableAccounts;
+                      
+                      return (
                         <TableRow key={line.id}>
                           <TableCell>
                             <TextField
@@ -416,7 +448,7 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
                               <MenuItem value="">
                                 <em>Select an account</em>
                               </MenuItem>
-                              {accounts.map((account) => (
+                              {accountOptions.map((account) => (
                                 <MenuItem key={account.account_id} value={account.account_id}>
                                   {account.account_number} - {account.account_name}
                                 </MenuItem>
@@ -439,12 +471,12 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
                           </TableCell>
                           <TableCell align="right">
                             {line.type === 'Debit' && line.amount
-                              ? `$${parseFloat(line.amount).toFixed(2)}`
+                              ? formatCurrency(line.amount)
                               : '-'}
                           </TableCell>
                           <TableCell align="right">
                             {line.type === 'Credit' && line.amount
-                              ? `$${parseFloat(line.amount).toFixed(2)}`
+                              ? formatCurrency(line.amount)
                               : '-'}
                           </TableCell>
                           <TableCell>
@@ -457,16 +489,17 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
                             </IconButton>
                           </TableCell>
                         </TableRow>
-                    ))}
+                      );
+                    })}
                     <TableRow sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>
                       <TableCell colSpan={3}>
                         <strong>Total</strong>
                       </TableCell>
                       <TableCell align="right">
-                        <strong>${totalDebit.toFixed(2)}</strong>
+                        <strong>{formatCurrency(totalDebit)}</strong>
                       </TableCell>
                       <TableCell align="right">
-                        <strong>${totalCredit.toFixed(2)}</strong>
+                        <strong>{formatCurrency(totalCredit)}</strong>
                       </TableCell>
                       <TableCell></TableCell>
                     </TableRow>
@@ -481,7 +514,7 @@ const NewJournalEntryDialog: React.FC<NewJournalEntryDialogProps> = ({
                     <Chip label="Balanced ✓" color="success" size="small" />
                   ) : (
                     <Chip
-                      label={`Out of balance by $${Math.abs(totalDebit - totalCredit).toFixed(2)}`}
+                      label={`Out of balance by ${formatCurrency(Math.abs(totalDebit - totalCredit))}`}
                       color="error"
                       size="small"
                     />

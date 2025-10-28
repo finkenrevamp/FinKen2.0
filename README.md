@@ -205,17 +205,50 @@ POST   /api/journal-entries/{id}/approve # Approve entry
 
 ## 🧪 Testing
 
-### Backend Testing
+The project includes comprehensive test suites for both backend and frontend.
+
+### Quick Test Commands
+
+**Run All Tests:**
 ```bash
-cd backend
-pytest
+./run_all_tests.sh
 ```
 
-### Frontend Testing
+**Backend Tests (Python/Pytest):**
+```bash
+cd backend
+python3 -m pytest                    # Run all tests
+python3 -m pytest -v                 # Verbose output
+python3 -m pytest --cov=.            # With coverage report
+```
+
+**Frontend Tests (Vitest):**
 ```bash
 cd frontend
-npm test
+npm test                             # Run all tests
+npm test -- --watch                  # Watch mode
+npm run test:ui                      # With UI
+npm run test:coverage                # With coverage report
 ```
+
+### Test Coverage
+
+**Backend (35 tests):**
+- ✅ Model validation tests (14 tests)
+- ✅ Password service tests (13 tests)
+- ✅ API route tests (8 tests)
+
+**Frontend:**
+- ✅ Authentication service tests
+- ✅ API client utility tests
+- ✅ Component rendering tests
+- ✅ Validation utility tests
+
+For detailed testing documentation, see:
+- **Comprehensive Guide**: [`TESTING.md`](./TESTING.md)
+- **Test Summary**: [`TEST_SUMMARY.md`](./TEST_SUMMARY.md)
+- **Backend Tests**: [`backend/README_TESTS.md`](./backend/README_TESTS.md)
+- **Frontend Tests**: [`frontend/README_TESTS.md`](./frontend/README_TESTS.md)
 
 ## 🚢 Deployment
 

@@ -757,10 +757,19 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {selectedEntry.lines.map((line) => (
+                      {[...selectedEntry.lines]
+                        .sort((a, b) => {
+                          // Sort Debit first, Credit second
+                          if (a.type === 'Debit' && b.type === 'Credit') return -1;
+                          if (a.type === 'Credit' && b.type === 'Debit') return 1;
+                          return 0;
+                        })
+                        .map((line) => (
                         <TableRow key={line.line_id}>
                           <TableCell>
-                            {line.account_number} - {line.account_name}
+                            <Box sx={{ pl: line.type === 'Credit' ? 4 : 0 }}>
+                              {line.account_number} - {line.account_name}
+                            </Box>
                           </TableCell>
                           <TableCell align="right">
                             {line.type === 'Debit' ? formatCurrency(line.amount) : '-'}

@@ -244,11 +244,6 @@ npm run test:coverage                # With coverage report
 - ✅ Component rendering tests
 - ✅ Validation utility tests
 
-For detailed testing documentation, see:
-- **Comprehensive Guide**: [`TESTING.md`](./TESTING.md)
-- **Test Summary**: [`TEST_SUMMARY.md`](./TEST_SUMMARY.md)
-- **Backend Tests**: [`backend/README_TESTS.md`](./backend/README_TESTS.md)
-- **Frontend Tests**: [`frontend/README_TESTS.md`](./frontend/README_TESTS.md)
 
 ## 🚢 Deployment
 

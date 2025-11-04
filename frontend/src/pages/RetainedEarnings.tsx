@@ -370,7 +370,7 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
             {/* Report Header */}
             <Box textAlign="center" mb={4}>
               <Typography variant="h4" gutterBottom fontWeight="bold">
-                FinKen Financial System
+                Addams & Family Inc. 
               </Typography>
               <Typography variant="h5" gutterBottom>
                 Statement of Retained Earnings

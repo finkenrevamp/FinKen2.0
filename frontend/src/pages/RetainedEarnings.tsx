@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   Box, 
@@ -14,14 +14,19 @@ import {
   TableContainer,
   TableRow,
   Divider,
-  Stack
+  Stack,
+  IconButton,
+  Tooltip
 } from '@mui/material';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import Header from '../components/Header';
 import CalendarButton from '../components/CalendarButton';
 import HelpButton from '../components/HelpButton';
 import type { User } from '../types/auth';
 import reportsService from '../services/reportsService';
 import type { RetainedEarningsReport } from '../services/reportsService';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface RetainedEarningsProps {
   user: User;
@@ -32,6 +37,8 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<RetainedEarningsReport | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
   
   // Default to current year (Jan 1 to Dec 31)
   const currentYear = new Date().getFullYear();
@@ -71,11 +78,76 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
     return new Date(year, month - 1, day).toLocaleDateString();
   };
 
+  const exportToPDF = async () => {
+    if (!reportRef.current || !report) return;
+
+    try {
+      setExporting(true);
+      
+      // Create a canvas from the report element
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: imgHeight > imgWidth ? 'portrait' : 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Add image to PDF
+      const imgData = canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      // Generate filename with date range
+      const fileName = `Retained_Earnings_${startDate}_to_${endDate}.pdf`;
+      
+      // Save the PDF
+      pdf.save(fileName);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      setError('Failed to generate PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Box sx={{ flexGrow: 1, bgcolor: 'background.default', minHeight: '100vh', width: '100%' }}>
       <Header user={user} onLogout={onLogout} />
       
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4, pt: 10 }}>
+        {/* Export PDF Button - Top Right */}
+        {report && !loading && (
+          <Box sx={{ position: 'absolute', top: 80, right: 40, zIndex: 1000 }}>
+            <Tooltip title="Export to PDF">
+              <IconButton
+                color="primary"
+                onClick={exportToPDF}
+                disabled={exporting}
+                sx={{
+                  bgcolor: 'background.paper',
+                  boxShadow: 2,
+                  '&:hover': {
+                    bgcolor: 'primary.main',
+                    color: 'white',
+                  },
+                }}
+              >
+                <PictureAsPdfIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+
         {/* Action Buttons */}
         <Box sx={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
           <Stack direction="column" spacing={2}>
@@ -130,7 +202,7 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
 
         {/* Report Display */}
         {!loading && report && (
-          <Paper sx={{ p: 4 }}>
+          <Paper sx={{ p: 4 }} ref={reportRef}>
             {/* Report Header */}
             <Box textAlign="center" mb={4}>
               <Typography variant="h4" gutterBottom fontWeight="bold">

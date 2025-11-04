@@ -42,7 +42,48 @@ export interface RetainedEarningsReport {
     ending_balance: string;
   };
 }
+export interface BalanceSheetAccount {
+  account_name: string;
+  amount: string;
+}
+export interface BalanceSheetReport {
+  period: {
+    start_date: string;
+    end_date: string;
+    formatted_end_date: string;
+  };
+  assets: BalanceSheetAccount[];
+  liabilities: BalanceSheetAccount[];
+  equity: BalanceSheetAccount[];
+  total_assets: string;
+  total_liabilities_equity: string;
+}
 
+<<<<<<< HEAD
+export interface IncomeStatementReport {
+  period: {
+    start_date: string;
+    end_date: string;
+    formatted_end_date: string;
+  };
+  revenue: {
+    total: string;
+    details: Array<{
+      account_name: string;
+      amount: string;
+      type: string;
+    }>;
+  };
+  expenses: {
+    total: string;
+    details: Array<{
+      account_name: string;
+      amount: string;
+      type: string;
+    }>;
+  };
+  net_income: string;
+=======
 export interface TrialBalanceReport {
   period: {
     start_date: string;
@@ -60,6 +101,7 @@ export interface TrialBalanceReport {
   total_credits: string;
   is_balanced: boolean;
   difference: string;
+>>>>>>> 6735b90d0b19cf22afb8022005f09fdb9f683020
 }
 
 export const reportsService = {
@@ -72,13 +114,30 @@ export const reportsService = {
     );
     return response.data;
   },
+     /**
+ * Get balance sheet report for a date range
+ */
+ async getBalanceSheet(startDate: string, endDate: string): Promise<BalanceSheetReport> {
+  const response = await apiClient.get<BalanceSheetReport>(
+    `/reports/balance-sheet?start_date=${startDate}&end_date=${endDate}`
+  );
+  return response.data;
+},
 
   /**
+<<<<<<< HEAD
+   * Get income statement report for a date range
+   */
+  async getIncomeStatement(startDate: string, endDate: string): Promise<IncomeStatementReport> {
+    const response = await apiClient.get<IncomeStatementReport>(
+      `/reports/income-statement?start_date=${startDate}&end_date=${endDate}`
+=======
    * Get trial balance report for a date range
    */
   async getTrialBalance(startDate: string, endDate: string): Promise<TrialBalanceReport> {
     const response = await apiClient.get<TrialBalanceReport>(
       `/reports/trial-balance?start_date=${startDate}&end_date=${endDate}`
+>>>>>>> 6735b90d0b19cf22afb8022005f09fdb9f683020
     );
     return response.data;
   },

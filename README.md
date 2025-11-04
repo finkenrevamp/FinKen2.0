@@ -78,13 +78,15 @@ cd backend
 
 # Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source venv/bin/activate  
+# On Windows: 
+source venv/Scripts/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Start the development server
-python main.py
+python run_server.py
 ```
 
 The backend API will be available at `http://localhost:8000`
@@ -101,7 +103,7 @@ cd frontend
 npm install
 
 # Start the development server
-npm run dev
+npm run start:frontend
 ```
 
 The frontend application will be available at `http://localhost:5173`

@@ -47,6 +47,17 @@ export interface SendEmailRequest {
 }
 
 /**
+ * Send email with attachment request interface
+ */
+export interface SendEmailWithAttachmentRequest {
+  subject: string;
+  body: string;
+  attachment_filename: string;
+  attachment_content: string; // Base64-encoded content
+  attachment_content_type?: string; // Defaults to application/pdf
+}
+
+/**
  * Suspend user request interface
  */
 export interface SuspendUserRequest {
@@ -94,6 +105,14 @@ export class ProfileService {
   }
 
   /**
+   * Get all users for email purposes (any authenticated user)
+   */
+  async getUsersForEmail(): Promise<UserData[]> {
+    const response = await apiClient.get<UserData[]>('profiles/users/for-email');
+    return response.data;
+  }
+
+  /**
    * Get user by ID (admin only)
    */
   async getUserById(userId: string): Promise<UserData> {
@@ -118,6 +137,28 @@ export class ProfileService {
   async sendEmailToUser(userId: string, emailData: SendEmailRequest): Promise<{ message: string; user_id: string; email: string }> {
     const response = await apiClient.post<{ message: string; user_id: string; email: string }>(
       `profiles/users/${userId}/send-email`,
+      emailData
+    );
+    return response.data;
+  }
+
+  /**
+   * Send email with PDF attachment to user (admin only)
+   */
+  async sendEmailWithAttachmentToUser(userId: string, emailData: SendEmailWithAttachmentRequest): Promise<{ message: string; user_id: string; email: string }> {
+    const response = await apiClient.post<{ message: string; user_id: string; email: string }>(
+      `profiles/users/${userId}/send-email-with-attachment`,
+      emailData
+    );
+    return response.data;
+  }
+
+  /**
+   * Send email with PDF attachment to user (any authenticated user)
+   */
+  async sendEmailWithAttachment(userId: string, emailData: SendEmailWithAttachmentRequest): Promise<{ message: string; user_id: string; email: string }> {
+    const response = await apiClient.post<{ message: string; user_id: string; email: string }>(
+      `profiles/send-email-with-attachment/${userId}`,
       emailData
     );
     return response.data;

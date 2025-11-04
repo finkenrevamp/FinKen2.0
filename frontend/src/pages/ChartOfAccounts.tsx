@@ -34,6 +34,8 @@ import {
   Block,
 } from '@mui/icons-material';
 import Header from '../components/Header';
+import CalendarButton from '../components/CalendarButton';
+import EmailButton from '../components/EmailButton';
 import type { User } from '../types/auth';
 import { accountsService, type AccountData, type CreateAccountRequest, type UpdateAccountRequest } from '../services/accountsService';
 
@@ -509,6 +511,14 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ user, onLogout }) => 
       <Header user={user} onLogout={onLogout} />
 
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4, pt: 10 }}>
+        {/* Calendar Button - Top Left */}
+        <CalendarButton />
+
+        {/* Email Button - Top Right */}
+        <Box sx={{ position: 'absolute', top: 80, right: 20, zIndex: 1 }}>
+          <EmailButton />
+        </Box>
+
         {/* Header Section */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Box>

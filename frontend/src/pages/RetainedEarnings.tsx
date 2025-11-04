@@ -18,7 +18,6 @@ import {
 } from '@mui/material';
 import Header from '../components/Header';
 import CalendarButton from '../components/CalendarButton';
-import EmailButton from '../components/EmailButton';
 import HelpButton from '../components/HelpButton';
 import type { User } from '../types/auth';
 import reportsService from '../services/reportsService';
@@ -81,7 +80,6 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
         <Box sx={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
           <Stack direction="column" spacing={2}>
             <CalendarButton />
-            <EmailButton />
             <HelpButton />
           </Stack>
         </Box>

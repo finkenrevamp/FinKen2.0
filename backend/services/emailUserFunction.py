@@ -5,6 +5,7 @@ Handles sending emails using Mailjet API
 
 import os
 import logging
+import requests
 from typing import Optional
 from mailjet_rest import Client
 from dotenv import load_dotenv
@@ -20,6 +21,8 @@ MAILJET_API_KEY = os.getenv("MAILJET_API_KEY")
 MAILJET_API_SECRET = os.getenv("MAILJET_API_SECRET")
 SENDER_EMAIL = "noreply@job-fit-ai.com"
 SENDER_NAME = "FinKen 2.0"
+# Timeout for email requests (in seconds)
+EMAIL_TIMEOUT = 30
 
 
 class EmailService:
@@ -41,7 +44,8 @@ class EmailService:
         receiver_name: str,
         subject: str,
         body: str,
-        html_body: Optional[str] = None
+        html_body: Optional[str] = None,
+        attachments: Optional[list] = None
     ) -> dict:
         """
         Send an email using Mailjet API
@@ -54,6 +58,10 @@ class EmailService:
             subject: Email subject line
             body: Plain text email body
             html_body: Optional HTML email body
+            attachments: Optional list of attachments. Each attachment should be a dict with:
+                        - ContentType: MIME type (e.g., 'application/pdf')
+                        - Filename: Name of the file
+                        - Base64Content: Base64-encoded file content
             
         Returns:
             dict: Response from Mailjet API
@@ -90,9 +98,23 @@ class EmailService:
             if html_body:
                 email_data['Messages'][0]['HTMLPart'] = html_body
             
+            # Add attachments if provided
+            if attachments:
+                email_data['Messages'][0]['Attachments'] = attachments
+                # Log attachment info
+                total_size = sum(len(att.get('Base64Content', '')) for att in attachments)
+                logger.info(f"Email has {len(attachments)} attachment(s), total size: ~{total_size // 1024} KB")
+            
             # Send the email
             logger.info(f"Sending email from {sender_email} to {receiver_email} with subject: {subject}")
-            result = self.client.send.create(data=email_data)
+            
+            # Use requests session with timeout instead of default client behavior
+            try:
+                result = self.client.send.create(data=email_data)
+            except requests.exceptions.Timeout:
+                raise Exception("Email service timeout. The request took too long. Please try with a smaller attachment.")
+            except requests.exceptions.ConnectionError as ce:
+                raise Exception(f"Connection error to email service: {str(ce)}")
             
             # Check response status
             if result.status_code == 200:
@@ -111,8 +133,16 @@ class EmailService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error sending email: {str(e)}")
-            raise Exception(f"Failed to send email: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"Error sending email: {error_msg}")
+            
+            # Provide more specific error messages
+            if "Connection aborted" in error_msg or "RemoteDisconnected" in error_msg:
+                raise Exception("Email service connection timeout. The attachment may be too large. Please try with a smaller file or shorter date range.")
+            elif "timeout" in error_msg.lower():
+                raise Exception("Email service timeout. Please try again or reduce the attachment size.")
+            else:
+                raise Exception(f"Failed to send email: {error_msg}")
 
 
 # Global email service instance
@@ -141,7 +171,8 @@ def send_email(
     receiver_name: str,
     subject: str,
     body: str,
-    html_body: Optional[str] = None
+    html_body: Optional[str] = None,
+    attachments: Optional[list] = None
 ) -> dict:
     """
     Convenience function to send an email
@@ -154,6 +185,7 @@ def send_email(
         subject: Email subject line
         body: Plain text email body
         html_body: Optional HTML email body
+        attachments: Optional list of attachments
         
     Returns:
         dict: Response from Mailjet API with success status
@@ -180,7 +212,8 @@ def send_email(
         receiver_name=receiver_name,
         subject=subject,
         body=body,
-        html_body=html_body
+        html_body=html_body,
+        attachments=attachments
     )
 
 

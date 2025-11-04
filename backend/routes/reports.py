@@ -398,7 +398,13 @@ async def get_trial_balance(
 
             # Calculate final balance
             total_balance = historical_balance + period_balance
-            
+
+            # Only include accounts that have activity in the requested period
+            # If there are no period entries, skip this account so the trial
+            # balance shows only accounts within the start/end date range.
+            if not period_entries:
+                continue
+
             # Ensures positive balance on both sides per normal side rules
             debit_balance = Decimal("0.00")
             credit_balance = Decimal("0.00")

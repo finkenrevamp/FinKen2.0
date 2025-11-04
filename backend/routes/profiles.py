@@ -54,6 +54,15 @@ class SendEmailRequest(BaseModel):
     body: str
 
 
+class SendEmailWithAttachmentRequest(BaseModel):
+    """Send email with attachment request"""
+    subject: str
+    body: str
+    attachment_filename: str
+    attachment_content: str  # Base64-encoded content
+    attachment_content_type: str = "application/pdf"
+
+
 class SuspendUserRequest(BaseModel):
     """Suspend user request"""
     suspension_end_date: date
@@ -210,6 +219,71 @@ async def get_all_users(
         raise
     except Exception as e:
         logger.error(f"Get users error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while fetching users: {str(e)}"
+        )
+
+
+@router.get("/users/for-email", response_model=List[UserWithEmail])
+async def get_users_for_email(
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Get all users for email purposes (any authenticated user)
+    This allows any authenticated user to see the list of users to send reports to
+    """
+    try:
+        supabase = get_supabase_client()
+        service_client = get_supabase_service().get_service_client()
+        
+        # Get all profiles
+        profiles_response = supabase.from_("profiles").select("*").execute()
+        
+        users_with_email = []
+        
+        for profile in profiles_response.data:
+            try:
+                # Get user email from auth.users using service client
+                user_id = profile.get("id")
+                auth_user_response = service_client.auth.admin.get_user_by_id(user_id)
+                email = auth_user_response.user.email if auth_user_response and auth_user_response.user and auth_user_response.user.email else "N/A"
+                
+                # Get role name
+                role_id = profile.get("RoleID")
+                role_name = "Unknown"
+                if role_id:
+                    role_response = supabase.from_("roles").select("RoleName").eq("RoleID", role_id).single().execute()
+                    if role_response.data:
+                        role_name = role_response.data.get("RoleName", "Unknown")
+                
+                users_with_email.append(UserWithEmail(
+                    id=str(profile.get("id")),
+                    profile_id=profile.get("ProfileID", 0),
+                    username=profile.get("Username", ""),
+                    first_name=profile.get("FirstName", ""),
+                    last_name=profile.get("LastName", ""),
+                    email=email,
+                    dob=profile.get("DOB"),
+                    address=profile.get("Address"),
+                    profile_picture_url=profile.get("ProfilePictureURL"),
+                    role_id=profile.get("RoleID", 0),
+                    role_name=role_name,
+                    is_active=profile.get("isActive", True),
+                    is_suspended=profile.get("isSuspended", False),
+                    suspension_end_date=profile.get("SuspensionEndDate"),
+                    date_created=profile.get("DateCreated")
+                ))
+            except Exception as e:
+                logger.error(f"Error fetching email for user {profile.get('id')}: {e}")
+                continue
+        
+        return users_with_email
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get users for email error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while fetching users: {str(e)}"
@@ -585,6 +659,166 @@ async def send_user_email(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while sending email: {str(e)}"
+        )
+
+
+@router.post("/users/{user_id}/send-email-with-attachment")
+async def send_user_email_with_attachment(
+    user_id: str,
+    email_data: SendEmailWithAttachmentRequest,
+    current_user: Profile = Depends(require_admin)
+):
+    """Send email with PDF attachment to user (admin only)"""
+    try:
+        supabase = get_supabase_client()
+        service_client = get_supabase_service().get_service_client()
+        
+        # Get user profile
+        profile_response = supabase.from_("profiles").select("*").eq("id", user_id).single().execute()
+        
+        if not profile_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        profile = profile_response.data
+        user_name = f"{profile.get('FirstName', '')} {profile.get('LastName', '')}"
+        
+        # Get user email from auth.users
+        auth_user_response = service_client.auth.admin.get_user_by_id(user_id)
+        if not auth_user_response or not auth_user_response.user or not auth_user_response.user.email:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User email not found"
+            )
+        
+        user_email = auth_user_response.user.email
+        
+        # Get admin email
+        admin_auth_response = service_client.auth.admin.get_user_by_id(str(current_user.id))
+        admin_email = admin_auth_response.user.email if admin_auth_response and admin_auth_response.user and admin_auth_response.user.email else "admin@finken.com"
+        admin_name = f"{current_user.first_name} {current_user.last_name}"
+        
+        # Prepare attachment
+        attachments = [
+            {
+                "ContentType": email_data.attachment_content_type,
+                "Filename": email_data.attachment_filename,
+                "Base64Content": email_data.attachment_content
+            }
+        ]
+        
+        # Send email with attachment
+        result = send_email(
+            sender_email=admin_email or "admin@finken.com",
+            sender_name=admin_name,
+            receiver_email=user_email,
+            receiver_name=user_name,
+            subject=email_data.subject,
+            body=email_data.body,
+            attachments=attachments
+        )
+        
+        if result.get("success"):
+            return {
+                "message": "Email with attachment sent successfully",
+                "user_id": user_id,
+                "email": user_email
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send email with attachment"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send email with attachment error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while sending email with attachment: {str(e)}"
+        )
+
+
+@router.post("/send-email-with-attachment/{user_id}")
+async def send_email_with_attachment_authenticated(
+    user_id: str,
+    email_data: SendEmailWithAttachmentRequest,
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """Send email with PDF attachment to user (any authenticated user)"""
+    try:
+        supabase = get_supabase_client()
+        service_client = get_supabase_service().get_service_client()
+        
+        # Get recipient profile
+        profile_response = supabase.from_("profiles").select("*").eq("id", user_id).single().execute()
+        
+        if not profile_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        profile = profile_response.data
+        user_name = f"{profile.get('FirstName', '')} {profile.get('LastName', '')}"
+        
+        # Get recipient email from auth.users
+        auth_user_response = service_client.auth.admin.get_user_by_id(user_id)
+        if not auth_user_response or not auth_user_response.user or not auth_user_response.user.email:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User email not found"
+            )
+        
+        user_email = auth_user_response.user.email
+        
+        # Get sender (current user) email
+        sender_auth_response = service_client.auth.admin.get_user_by_id(str(current_user.id))
+        sender_email = sender_auth_response.user.email if sender_auth_response and sender_auth_response.user and sender_auth_response.user.email else "noreply@finken.com"
+        sender_name = f"{current_user.first_name} {current_user.last_name}"
+        
+        # Prepare attachment
+        attachments = [
+            {
+                "ContentType": email_data.attachment_content_type,
+                "Filename": email_data.attachment_filename,
+                "Base64Content": email_data.attachment_content
+            }
+        ]
+        
+        # Send email with attachment
+        result = send_email(
+            sender_email=sender_email or "noreply@finken.com",
+            sender_name=sender_name,
+            receiver_email=user_email,
+            receiver_name=user_name,
+            subject=email_data.subject,
+            body=email_data.body,
+            attachments=attachments
+        )
+        
+        if result.get("success"):
+            return {
+                "message": "Email with attachment sent successfully",
+                "user_id": user_id,
+                "email": user_email
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send email with attachment"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send email with attachment error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while sending email with attachment: {str(e)}"
         )
 
 

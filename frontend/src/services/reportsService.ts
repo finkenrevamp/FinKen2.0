@@ -43,6 +43,25 @@ export interface RetainedEarningsReport {
   };
 }
 
+export interface TrialBalanceReport {
+  period: {
+    start_date: string;
+    end_date: string;
+  };
+  accounts: Array<{
+    account_id: number;
+    account_number: string;
+    account_name: string;
+    category: string;
+    debit_balance: string;
+    credit_balance: string;
+  }>;
+  total_debits: string;
+  total_credits: string;
+  is_balanced: boolean;
+  difference: string;
+}
+
 export const reportsService = {
   /**
    * Get retained earnings report for a date range
@@ -50,6 +69,16 @@ export const reportsService = {
   async getRetainedEarnings(startDate: string, endDate: string): Promise<RetainedEarningsReport> {
     const response = await apiClient.get<RetainedEarningsReport>(
       `/reports/retained-earnings?start_date=${startDate}&end_date=${endDate}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get trial balance report for a date range
+   */
+  async getTrialBalance(startDate: string, endDate: string): Promise<TrialBalanceReport> {
+    const response = await apiClient.get<TrialBalanceReport>(
+      `/reports/trial-balance?start_date=${startDate}&end_date=${endDate}`
     );
     return response.data;
   },

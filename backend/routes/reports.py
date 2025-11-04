@@ -259,3 +259,191 @@ async def get_retained_earnings_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while generating the retained earnings report: {str(e)}"
         )
+
+def get_account_balance(initial_balance, entries, normal_side):
+    """
+    Calculate account balance considering normal side of the account.
+    For debit-normal accounts (Assets, Expenses, Dividends):
+        - Debit entries increase balance
+        - Credit entries decrease balance
+        - Positive balance is a debit balance
+    For credit-normal accounts (Liabilities, Equity, Revenue):
+        - Credit entries increase balance
+        - Debit entries decrease balance
+        - Positive balance is a credit balance
+    """
+    balance = Decimal(str(initial_balance))
+    
+    for entry in entries:
+        amount = Decimal(str(entry["Amount"]))
+        entry_type = entry["Type"]
+
+        # For debit-normal accounts:
+        # Debits increase, Credits decrease
+        if normal_side == "Debit":
+            if entry_type == "Debit":
+                balance += amount
+            else:  # Credit
+                balance -= amount
+        # For credit-normal accounts:
+        # Credits increase, Debits decrease
+        else:
+            if entry_type == "Credit":
+                balance += amount
+            else:  # Debit
+                balance -= amount
+    
+    return balance
+
+@router.get("/trial-balance")
+async def get_trial_balance(
+    start_date: str = Query(..., description="Start date for the report period (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date for the report period (YYYY-MM-DD)"),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Generate Trial Balance report for a specified date range.
+    Returns the balances for all accounts, with their debit and credit totals.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate date format
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            
+            if end_dt < start_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Use YYYY-MM-DD"
+            )
+
+        # Get all active accounts
+        accounts_response = supabase.table("chartofaccounts").select("*").eq("IsActive", True).execute()
+        if not accounts_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active accounts found"
+            )
+        
+        accounts = accounts_response.data
+        trial_balance = []
+        total_debits = Decimal("0.00")
+        total_credits = Decimal("0.00")
+
+        # Add one day to end_date to include all entries on that day
+        from datetime import timedelta
+        end_date_inclusive = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        for account in accounts:
+            normal_side = account["NormalSide"]
+            if not normal_side:
+                logger.warning(f"Account {account['AccountNumber']} has no NormalSide specified")
+                continue
+
+            # Get initial balance and journal entries
+            initial_balance = Decimal(str(account.get("Balance", "0.00")))
+            period_entries = []
+            historical_entries = []
+
+            # Get journal entries for the period
+            entries_response = supabase.table("journalentries") \
+                .select("*, journalentrylines!inner(*)") \
+                .eq("Status", "Approved") \
+                .gte("EntryDate", start_date) \
+                .lt("EntryDate", end_date_inclusive) \
+                .execute()
+            
+            if entries_response.data:
+                for entry in entries_response.data:
+                    for line in entry.get("journalentrylines", []):
+                        if line.get("AccountID") == account["AccountID"]:
+                            period_entries.append({
+                                "Type": line["Type"],
+                                "Amount": line["Amount"]
+                            })
+
+            # Get historical entries (before start_date) if needed
+            creation_date = account.get("DateCreated")
+            if creation_date:
+                try:
+                    parsed_date = datetime.strptime(creation_date.split('.')[0], "%Y-%m-%dT%H:%M:%S")
+                    if parsed_date < start_dt:
+                        historical_response = supabase.table("journalentries") \
+                            .select("*, journalentrylines!inner(*)") \
+                            .eq("Status", "Approved") \
+                            .lt("EntryDate", start_date) \
+                            .execute()
+                        
+                        if historical_response.data:
+                            for entry in historical_response.data:
+                                for line in entry.get("journalentrylines", []):
+                                    if line.get("AccountID") == account["AccountID"]:
+                                        historical_entries.append({
+                                            "Type": line["Type"],
+                                            "Amount": line["Amount"]
+                                        })
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Error parsing date for account {account['AccountNumber']}: {str(e)}")
+                    
+            # Calculate balances starting with initial balance
+            historical_balance = get_account_balance(initial_balance, historical_entries, normal_side)
+            period_balance = get_account_balance(0, period_entries, normal_side)  # Period entries start from 0
+
+            # Calculate final balance
+            total_balance = historical_balance + period_balance
+            
+            # Ensures positive balance on both sides per normal side rules
+            debit_balance = Decimal("0.00")
+            credit_balance = Decimal("0.00")
+
+            if normal_side == "Debit":
+                if total_balance > 0:
+                    debit_balance = total_balance
+                else:
+                    credit_balance = -total_balance
+            else:
+                if total_balance > 0:
+                    credit_balance = total_balance
+                else:
+                    debit_balance = -total_balance
+
+            total_debits += debit_balance
+            total_credits += credit_balance
+
+            trial_balance.append({
+                "account_id": account["AccountID"],
+                "account_number": account["AccountNumber"],
+                "account_name": account["AccountName"],
+                "category": account["Category"],
+                "debit_balance": str(debit_balance),
+                "credit_balance": str(credit_balance)
+            })
+
+        # Sort accounts by account number
+        trial_balance.sort(key=lambda x: x["account_number"])
+
+        return {
+            "period": {
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            "accounts": trial_balance,
+            "total_debits": str(total_debits),
+            "total_credits": str(total_credits),
+            "is_balanced": total_debits == total_credits,
+            "difference": str(abs(total_debits - total_credits)) if total_debits != total_credits else "0.00"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating trial balance: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating trial balance: {str(e)}"
+        )

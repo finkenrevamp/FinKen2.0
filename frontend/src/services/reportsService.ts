@@ -42,6 +42,22 @@ export interface RetainedEarningsReport {
     ending_balance: string;
   };
 }
+export interface BalanceSheetAccount {
+  account_name: string;
+  amount: string;
+}
+export interface BalanceSheetReport {
+  period: {
+    start_date: string;
+    end_date: string;
+    formatted_end_date: string;
+  };
+  assets: BalanceSheetAccount[];
+  liabilities: BalanceSheetAccount[];
+  equity: BalanceSheetAccount[];
+  total_assets: string;
+  total_liabilities_equity: string;
+}
 
 <<<<<<< HEAD
 export interface IncomeStatementReport {
@@ -98,6 +114,15 @@ export const reportsService = {
     );
     return response.data;
   },
+     /**
+ * Get balance sheet report for a date range
+ */
+ async getBalanceSheet(startDate: string, endDate: string): Promise<BalanceSheetReport> {
+  const response = await apiClient.get<BalanceSheetReport>(
+    `/reports/balance-sheet?start_date=${startDate}&end_date=${endDate}`
+  );
+  return response.data;
+},
 
   /**
 <<<<<<< HEAD

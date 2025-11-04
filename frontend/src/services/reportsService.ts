@@ -43,6 +43,31 @@ export interface RetainedEarningsReport {
   };
 }
 
+export interface IncomeStatementReport {
+  period: {
+    start_date: string;
+    end_date: string;
+    formatted_end_date: string;
+  };
+  revenue: {
+    total: string;
+    details: Array<{
+      account_name: string;
+      amount: string;
+      type: string;
+    }>;
+  };
+  expenses: {
+    total: string;
+    details: Array<{
+      account_name: string;
+      amount: string;
+      type: string;
+    }>;
+  };
+  net_income: string;
+}
+
 export const reportsService = {
   /**
    * Get retained earnings report for a date range
@@ -50,6 +75,16 @@ export const reportsService = {
   async getRetainedEarnings(startDate: string, endDate: string): Promise<RetainedEarningsReport> {
     const response = await apiClient.get<RetainedEarningsReport>(
       `/reports/retained-earnings?start_date=${startDate}&end_date=${endDate}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get income statement report for a date range
+   */
+  async getIncomeStatement(startDate: string, endDate: string): Promise<IncomeStatementReport> {
+    const response = await apiClient.get<IncomeStatementReport>(
+      `/reports/income-statement?start_date=${startDate}&end_date=${endDate}`
     );
     return response.data;
   },

@@ -259,12 +259,139 @@ async def get_retained_earnings_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while generating the retained earnings report: {str(e)}"
         )
+@router.get("/balance-sheet")
+async def get_balance_sheet_report(
+    start_date: str = Query(..., description="Start date for the report (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date for the report (YYYY-MM-DD)"),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Generate Balance Sheet as of a specific date
 
-<<<<<<< HEAD
+    Formula:
+    Assets = Liabilities + Equity
+    """
+    try:
+        supabase = get_supabase_client()
+
+        # Validate date format
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+
+            if end_dt < start_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Use YYYY-MM-DD"
+            )
+
+        # Get all accounts with their categories and normal sides
+        accounts = supabase.from_("chartofaccounts").select(
+            "AccountID, AccountName, Category, Subcategory, NormalSide, Balance"
+        ).execute()
+
+        if not accounts.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No accounts found for balance sheet generation."
+            )
+
+        # Calculate ending balances as of the given date
+        assets = {"current": [], "non_current": []}
+        liabilities = {"current": [], "long_term": []}
+        equity = []
+
+        total_assets = Decimal("0.00")
+        total_liabilities = Decimal("0.00")
+        total_equity = Decimal("0.00")
+
+        for account in accounts.data:
+            acc_id = account["AccountID"]
+            acc_name = account["AccountName"]
+            category = account["Category"]
+            subcategory = (account.get("Subcategory") or "").lower()
+            normal_side = account["NormalSide"]
+
+            # Compute account balance as of end_date
+            ledger_entries = supabase.from_("accountledger").select(
+                "Debit, Credit, TransactionDate"
+            ).eq("AccountID", acc_id).lte("TransactionDate", end_date).execute()
+
+            debit_total = Decimal("0.00")
+            credit_total = Decimal("0.00")
+            for entry in ledger_entries.data:
+                debit_total += Decimal(str(entry.get("Debit", "0.00")))
+                credit_total += Decimal(str(entry.get("Credit", "0.00")))
+
+            balance = Decimal(str(account.get("Balance", "0.00")))
+
+            # Apply normal side to determine ending balance
+            if normal_side == "Debit":
+                ending_balance = balance + debit_total - credit_total
+            else:
+                ending_balance = balance + credit_total - debit_total
+
+            # Group into sections
+            if category == "Asset":
+                section = "current" if "current" in subcategory or "cash" in acc_name.lower() or "receivable" in acc_name.lower() else "non_current"
+                assets[section].append({
+                    "account_name": acc_name,
+                    "balance": str(ending_balance)
+                })
+                total_assets += ending_balance
+
+            elif category == "Liability":
+                section = "current" if "current" in subcategory or "payable" in acc_name.lower() else "long_term"
+                liabilities[section].append({
+                    "account_name": acc_name,
+                    "balance": str(ending_balance)
+                })
+                total_liabilities += ending_balance
+
+            elif category == "Equity":
+                equity.append({
+                    "account_name": acc_name,
+                    "balance": str(ending_balance)
+                })
+                total_equity += ending_balance
+
+        # Flatten assets
+        assets_list = assets["current"] + assets["non_current"]
+        liabilities_list = liabilities["current"] + liabilities["long_term"]
+
+        # Construct flattened report
+        report = {
+            "period": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "formatted_end_date": end_dt.strftime("%B %d, %Y")
+            },
+            "assets": [{"account_name": a["account_name"], "amount": str(a["balance"])} for a in assets_list],
+            "liabilities": [{"account_name": l["account_name"], "amount": str(l["balance"])} for l in liabilities_list],
+            "equity": [{"account_name": e["account_name"], "amount": str(e["balance"])} for e in equity],
+            "total_assets": str(total_assets),
+            "total_liabilities_equity": str(total_liabilities + total_equity)
+        }
+        return report
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get balance sheet report error: {e}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while generating the balance sheet: {str(e)}"
+        )
+
 @router.get("/income-statement")
 async def get_income_statement_report(
-=======
-def get_account_balance(initial_balance, entries, normal_side):
+        initial_balance, entries, normal_side):
     """
     Calculate account balance considering normal side of the account.
     For debit-normal accounts (Assets, Expenses, Dividends):
@@ -301,7 +428,6 @@ def get_account_balance(initial_balance, entries, normal_side):
 
 @router.get("/trial-balance")
 async def get_trial_balance(
->>>>>>> 6735b90d0b19cf22afb8022005f09fdb9f683020
     start_date: str = Query(..., description="Start date for the report period (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date for the report period (YYYY-MM-DD)"),
     current_user: Profile = Depends(get_current_user_from_token)
@@ -317,7 +443,6 @@ async def get_trial_balance(
 =======
     Generate Trial Balance report for a specified date range.
     Returns the balances for all accounts, with their debit and credit totals.
->>>>>>> 6735b90d0b19cf22afb8022005f09fdb9f683020
     """
     try:
         supabase = get_supabase_client()
@@ -337,8 +462,6 @@ async def get_trial_balance(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid date format. Use YYYY-MM-DD"
             )
-<<<<<<< HEAD
-        
         # Format dates for database queries (ensure we get the full day range)
         # Add one day to end_date to include all entries on that day
         from datetime import timedelta
@@ -469,8 +592,6 @@ async def get_trial_balance(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while generating the income statement report: {str(e)}"
         )
-=======
-
         # Get all active accounts
         accounts_response = supabase.table("chartofaccounts").select("*").eq("IsActive", True).execute()
         if not accounts_response.data:
@@ -594,4 +715,3 @@ async def get_trial_balance(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error generating trial balance: {str(e)}"
         )
->>>>>>> 6735b90d0b19cf22afb8022005f09fdb9f683020

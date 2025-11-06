@@ -391,40 +391,166 @@ async def get_balance_sheet_report(
 
 @router.get("/income-statement")
 async def get_income_statement_report(
-        initial_balance, entries, normal_side):
+    start_date: str = Query(..., description="Start date for the report period (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date for the report period (YYYY-MM-DD)"),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
     """
-    Calculate account balance considering normal side of the account.
-    For debit-normal accounts (Assets, Expenses, Dividends):
-        - Debit entries increase balance
-        - Credit entries decrease balance
-        - Positive balance is a debit balance
-    For credit-normal accounts (Liabilities, Equity, Revenue):
-        - Credit entries increase balance
-        - Debit entries decrease balance
-        - Positive balance is a credit balance
+    Generate Income Statement report for a specified date range
+    
+    Formula:
+    Total Revenue
+    - Total Expenses
+    = Net Income
     """
-    balance = Decimal(str(initial_balance))
-    
-    for entry in entries:
-        amount = Decimal(str(entry["Amount"]))
-        entry_type = entry["Type"]
-
-        # For debit-normal accounts:
-        # Debits increase, Credits decrease
-        if normal_side == "Debit":
-            if entry_type == "Debit":
-                balance += amount
-            else:  # Credit
-                balance -= amount
-        # For credit-normal accounts:
-        # Credits increase, Debits decrease
-        else:
-            if entry_type == "Credit":
-                balance += amount
-            else:  # Debit
-                balance -= amount
-    
-    return balance
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate date format
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            
+            if end_dt < start_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Use YYYY-MM-DD"
+            )
+        # Format dates for database queries (ensure we get the full day range)
+        # Add one day to end_date to include all entries on that day
+        from datetime import timedelta
+        end_date_inclusive = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        # Get all approved journal entries and their lines for the period
+        journal_entries = supabase.from_("journalentries").select(
+            """
+            JournalEntryID,
+            EntryDate,
+            Status,
+            journalentrylines(
+                AccountID,
+                Type,
+                Amount,
+                chartofaccounts(
+                    AccountID,
+                    AccountName,
+                    Category,
+                    NormalSide
+                )
+            )
+            """
+        ).eq("Status", "Approved").gte("EntryDate", start_date).lt("EntryDate", end_date_inclusive).execute()
+        
+        # Calculate revenue and expenses from journal entry lines
+        total_revenue = Decimal("0.00")
+        total_expenses = Decimal("0.00")
+        revenue_details = []
+        expense_details = []
+        
+        # Dictionary to aggregate revenue and expense accounts
+        revenue_accounts = {}
+        expense_accounts = {}
+        
+        # Process all journal entry lines
+        for entry in journal_entries.data:
+            for line in entry.get("journalentrylines", []):
+                account = line.get("chartofaccounts")
+                
+                # Handle both dict and list responses
+                if isinstance(account, list) and len(account) > 0:
+                    account = account[0]
+                
+                if not account:
+                    continue
+                
+                category = account.get("Category")
+                normal_side = account.get("NormalSide")
+                account_name = account.get("AccountName")
+                amount = Decimal(str(line.get("Amount", "0.00")))
+                line_type = line.get("Type")
+                
+                # Revenue accounts (Credit normal side)
+                if category == "Revenue":
+                    # Credits increase revenue, debits decrease it
+                    if line_type == "Credit":
+                        total_revenue += amount
+                        if account_name not in revenue_accounts:
+                            revenue_accounts[account_name] = Decimal("0.00")
+                        revenue_accounts[account_name] += amount
+                    else:  # Debit
+                        total_revenue -= amount
+                        if account_name not in revenue_accounts:
+                            revenue_accounts[account_name] = Decimal("0.00")
+                        revenue_accounts[account_name] -= amount
+                
+                # Expense accounts (Debit normal side)
+                elif category == "Expense":
+                    # Debits increase expenses, credits decrease it
+                    if line_type == "Debit":
+                        total_expenses += amount
+                        if account_name not in expense_accounts:
+                            expense_accounts[account_name] = Decimal("0.00")
+                        expense_accounts[account_name] += amount
+                    else:  # Credit
+                        total_expenses -= amount
+                        if account_name not in expense_accounts:
+                            expense_accounts[account_name] = Decimal("0.00")
+                        expense_accounts[account_name] -= amount
+        
+        # Convert aggregated accounts to details list
+        for account_name, amount in revenue_accounts.items():
+            if amount != Decimal("0.00"):
+                revenue_details.append({
+                    "account_name": account_name,
+                    "amount": str(amount),
+                    "type": "Credit" if amount > 0 else "Debit"
+                })
+        
+        for account_name, amount in expense_accounts.items():
+            if amount != Decimal("0.00"):
+                expense_details.append({
+                    "account_name": account_name,
+                    "amount": str(abs(amount)),
+                    "type": "Debit" if amount > 0 else "Credit"
+                })
+        
+        # Calculate net income
+        net_income = total_revenue - total_expenses
+        
+        # Format the report
+        report = {
+            "period": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "formatted_end_date": end_dt.strftime("%B %d, %Y")
+            },
+            "revenue": {
+                "total": str(total_revenue),
+                "details": revenue_details
+            },
+            "expenses": {
+                "total": str(total_expenses),
+                "details": expense_details
+            },
+            "net_income": str(net_income)
+        }
+        
+        return report
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get income statement report error: {e}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while generating the income statement report: {str(e)}"
+        )
 
 @router.get("/trial-balance")
 async def get_trial_balance(

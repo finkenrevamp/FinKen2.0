@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Container, 
   Box, 
@@ -26,10 +26,6 @@ import {
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import EmailIcon from '@mui/icons-material/Email';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import dayjs, { Dayjs } from 'dayjs';
 import Header from '../components/Header';
 import CalendarButton from '../components/CalendarButton';
 import HelpButton from '../components/HelpButton';
@@ -46,8 +42,6 @@ interface TrialBalanceProps {
 }
 
 const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
-  const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('month'));
-  const [endDate, setEndDate] = useState<Dayjs | null>(dayjs());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<TrialBalanceReport | null>(null);
@@ -60,38 +54,26 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const handleDateChange = {
-    start: (newValue: unknown) => {
-      if (dayjs.isDayjs(newValue)) {
-        setStartDate(newValue);
-      }
-    },
-    end: (newValue: unknown) => {
-      if (dayjs.isDayjs(newValue)) {
-        setEndDate(newValue);
-      }
-    }
-  };
+  //date handling
+  const currentYear = new Date().getFullYear();
+  const [startDate, setStartDate] = useState(`${currentYear}-01-01`);
+  const [endDate, setEndDate] = useState(`${currentYear}-12-31`);
 
-  const fetchTrialBalance = useCallback(async () => {
-    if (!startDate || !endDate) return;
-    
-    setLoading(true);
-    setError(null);
+  const fetchTrialBalance = async () => {
     try {
-      const data = await reportsService.getTrialBalance(
-        startDate.format('YYYY-MM-DD'),
-        endDate.format('YYYY-MM-DD')
-      );
+      setLoading(true);
+      setError(null);
+      const data = await reportsService.getTrialBalance(startDate, endDate);
       setReport(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch trial balance');
+    } catch (err: any) {
+      console.error('Error fetching trial balance report:', err);
+      setError(err.message || 'Failed to load trial balance report');
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate]);
+  };
 
-  const exportToPDF = async () => {
+  /*const exportToPDF = async () => {
     if (!reportRef.current || !report) return;
 
     try {
@@ -118,6 +100,48 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
 
       const fileName = `Trial_Balance_${startDate?.format('YYYY-MM-DD')}_to_${endDate?.format('YYYY-MM-DD')}.pdf`;
       
+      pdf.save(fileName);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      setError('Failed to generate PDF');
+    } finally {
+      setExporting(false);
+    }
+  };*/
+
+  const exportToPDF = async () => {
+    if (!reportRef.current || !report) return;
+
+    try {
+      setExporting(true);
+      
+      // Create a canvas from the report element
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: imgHeight > imgWidth ? 'portrait' : 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Add image to PDF
+      const imgData = canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      // Generate filename with date range
+      const fileName = `Retained_Earnings_${startDate}_to_${endDate}.pdf`;
+      
+      // Save the PDF
       pdf.save(fileName);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -206,13 +230,13 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
         throw new Error(`PDF file is too large (${sizeInMB.toFixed(2)} MB). Maximum size is 10 MB.`);
       }
 
-      const fileName = `Trial_Balance_${startDate.format('YYYY-MM-DD')}_to_${endDate.format('YYYY-MM-DD')}.pdf`;
+      const fileName = `Trial_Balance_${startDate}_to_${endDate}.pdf`;
       
       console.log(`Sending email with PDF (${sizeInMB.toFixed(2)} MB) to ${selectedUser.email}...`);
       
       await profileService.sendEmailWithAttachment(selectedUser.id, {
-        subject: `FinKen 2.0 - Trial Balance Report (${startDate.format('YYYY-MM-DD')} to ${endDate.format('YYYY-MM-DD')})`,
-        body: `Dear ${selectedUser.first_name},\n\nPlease find attached the Trial Balance report for the period ${startDate.format('YYYY-MM-DD')} to ${endDate.format('YYYY-MM-DD')}.\n\nBest regards,\nFinKen 2.0 Team`,
+        subject: `FinKen 2.0 - Trial Balance Report (${startDate} to ${endDate})`,
+        body: `Dear ${selectedUser.first_name},\n\nPlease find attached the Trial Balance report for the period ${startDate} to ${endDate}.\n\nBest regards,\nFinKen 2.0 Team`,
         attachment_filename: fileName,
         attachment_content: pdfBase64,
         attachment_content_type: 'application/pdf'
@@ -314,6 +338,38 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
             Report Period
           </Typography>
           <Stack direction="row" spacing={2} alignItems="center">
+            <TextField
+              label="Start Date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="End Date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <Button 
+              variant="contained" 
+              onClick={fetchTrialBalance}
+              disabled={loading}
+            >
+              Generate Report
+            </Button>
+          </Stack>
+        </Paper>
+
+
+        
+        {/* Date Range Selection 
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Report Period
+          </Typography>
+          <Stack direction="row" spacing={2} alignItems="center">
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <DatePicker
                 label="Start Date"
@@ -343,6 +399,7 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
             </Button>
           </Stack>
         </Paper>
+        */}
 
         {/* Error Display */}
         {error && (
@@ -377,7 +434,7 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
                 Trial Balance
               </Typography>
               <Typography variant="h6" color="text.secondary">
-                {startDate?.format('MMMM D, YYYY')} - {endDate?.format('MMMM D, YYYY')}
+                {startDate} - {endDate}
               </Typography>
               {report && (
                 <Box mt={2}>
@@ -404,7 +461,7 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {report.accounts.map((account) => (
+                  {report.accounts && report.accounts.map((account) => (
                     <TableRow key={account.account_id}>
                       <TableCell>{account.account_number}</TableCell>
                       <TableCell>{account.account_name}</TableCell>
@@ -435,7 +492,7 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
             {/* Footer Note */}
             <Box mt={4} pt={2} borderTop="1px solid" borderColor="divider">
               <Typography variant="caption" color="text.secondary">
-                Report Period: {startDate?.format('MMMM D, YYYY')} - {endDate?.format('MMMM D, YYYY')}
+                Report Period: {startDate} - {endDate}
               </Typography>
             </Box>
           </Paper>

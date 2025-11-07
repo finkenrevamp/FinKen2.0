@@ -104,6 +104,10 @@ npm install
 
 # Start the development server
 npm run start:frontend
+
+or
+
+npm run dev
 ```
 
 The frontend application will be available at `http://localhost:5173`

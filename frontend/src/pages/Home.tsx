@@ -14,26 +14,15 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider,
   CircularProgress,
   Chip,
-  Stack,
-  Menu,
-  MenuItem,
 } from '@mui/material';
 import {
   Dashboard,
   TrendingUp,
   Assignment,
   People,
-  Warning,
-  CheckCircle,
-  Schedule,
-  AccountTree,
-  Create,
-  History,
   Assessment,
-  ArrowDropDown,
 } from '@mui/icons-material';
 import Header from '../components/Header';
 import type { User } from '../types/auth';
@@ -59,8 +48,6 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
   const [error, setError] = useState<string | null>(null);
   const [financialRatios, setFinancialRatios] = useState<FinancialRatios | null>(null);
   const [pendingJournalEntries, setPendingJournalEntries] = useState<JournalEntry[]>([]);
-  const [reportsMenuAnchor, setReportsMenuAnchor] = useState<null | HTMLElement>(null);
-  const [adminMenuAnchor, setAdminMenuAnchor] = useState<null | HTMLElement>(null);
   
   // Default to current year
   const currentYear = new Date().getFullYear();
@@ -112,32 +99,6 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
     fetchPendingEntries();
   }, [user.role]);
 
-  const handleReportsMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setReportsMenuAnchor(event.currentTarget);
-  };
-
-  const handleReportsMenuClose = () => {
-    setReportsMenuAnchor(null);
-  };
-
-  const handleReportsNavigation = (path: string) => {
-    handleReportsMenuClose();
-    navigate(path);
-  };
-
-  const handleAdminMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAdminMenuAnchor(event.currentTarget);
-  };
-
-  const handleAdminMenuClose = () => {
-    setAdminMenuAnchor(null);
-  };
-
-  const handleAdminNavigation = (path: string) => {
-    handleAdminMenuClose();
-    navigate(path);
-  };
-
   // Render a financial ratio card
   const renderRatioCard = (ratioName: keyof FinancialRatios) => {
     if (!financialRatios) return null;
@@ -150,33 +111,54 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
     return (
       <Card
         key={ratioName}
-        elevation={2}
+        elevation={4}
         sx={{
           height: '100%',
-          borderLeft: `4px solid`,
-          borderLeftColor: color === 'success' ? 'success.main' : color === 'warning' ? 'warning.main' : 'error.main',
+          borderRadius: 2,
+          transition: 'all 0.3s ease-in-out',
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            boxShadow: 8,
+          },
+          background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
         }}
       >
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-            <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
+        <CardContent sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+            <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
               {metadata.label}
             </Typography>
             <Chip
               label={status === 'good' ? 'Good' : status === 'warning' ? 'Warning' : 'Critical'}
               color={color}
               size="small"
+              sx={{ fontWeight: 'bold' }}
             />
           </Box>
-          <Typography variant="h4" component="div" sx={{ mb: 1, color: `${color}.main` }}>
+          <Typography 
+            variant="h3" 
+            component="div" 
+            sx={{ 
+              mb: 2, 
+              fontWeight: 'bold',
+              color: color === 'success' ? 'success.main' : color === 'warning' ? 'warning.main' : 'error.main',
+            }}
+          >
             {formatRatioValue(value, metadata.unit)}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Formula: {metadata.formula}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            Normal Range: {metadata.normalRange}
-          </Typography>
+          <Box sx={{ 
+            p: 2, 
+            backgroundColor: 'rgba(0, 0, 0, 0.02)', 
+            borderRadius: 1,
+            border: '1px solid rgba(0, 0, 0, 0.08)'
+          }}>
+            <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 500 }}>
+              <strong>Formula:</strong> {metadata.formula}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
+              <strong>Normal Range:</strong> {metadata.normalRange}
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
     );
@@ -207,8 +189,8 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
           </Typography>
         </Box>
 
-        {/* Quick Access to Registration Requests (Admin/Manager only) */}
-        {(user.role === 'Administrator' || user.role === 'Manager') && (
+        {/* Quick Access to Registration Requests (Admin only) */}
+        {user.role === 'Administrator' && (
           <Card 
             elevation={3} 
             sx={{ 
@@ -285,221 +267,91 @@ const Home: React.FC<HomeProps> = ({ user, onLogout }) => {
         )}
 
         {/* Financial Ratios Dashboard */}
-        <Paper sx={{ p: 3, mb: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
-              <TrendingUp sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Financial Ratios Dashboard
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Period: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
-                    </Typography>
-                  </Box>
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            p: 4, 
+            mb: 4,
+            background: 'linear-gradient(135deg, #1e88e5 0%, #1565c0 50%, #0d47a1 100%)',
+            color: 'white',
+            borderRadius: 3
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <TrendingUp sx={{ mr: 2, fontSize: 40 }} />
+              <Box>
+                <Typography variant="h4" component="h2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                  Financial Ratios Dashboard
+                </Typography>
+                <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                  Period: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
 
           {loading ? (
-            <Box display="flex" justifyContent="center" py={4}>
-              <CircularProgress />
+            <Box display="flex" justifyContent="center" py={8}>
+              <CircularProgress sx={{ color: 'white' }} size={60} />
             </Box>
           ) : financialRatios ? (
-            <>
+            <Box sx={{ mt: 3 }}>
               {/* Profitability Ratios */}
-              <Typography variant="h6" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 'bold' }}>
-                Profitability Ratios
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
-                {renderRatioCard('netProfitMargin')}
-                {renderRatioCard('returnOnAssets')}
-                {renderRatioCard('returnOnEquity')}
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center' }}>
+                  <Assessment sx={{ mr: 1 }} />
+                  Profitability Ratios
+                </Typography>
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, 
+                  gap: 3
+                }}>
+                  {renderRatioCard('netProfitMargin')}
+                  {renderRatioCard('returnOnAssets')}
+                  {renderRatioCard('returnOnEquity')}
+                </Box>
               </Box>
 
               {/* Liquidity Ratios */}
-              <Typography variant="h6" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 'bold' }}>
-                Liquidity Ratios
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
-                {renderRatioCard('currentRatio')}
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center' }}>
+                  <TrendingUp sx={{ mr: 1 }} />
+                  Liquidity Ratios
+                </Typography>
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, 
+                  gap: 3
+                }}>
+                  {renderRatioCard('currentRatio')}
+                </Box>
               </Box>
 
               {/* Leverage Ratios */}
-              <Typography variant="h6" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 'bold' }}>
-                Leverage Ratios
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
-                {renderRatioCard('debtToAssets')}
-                {renderRatioCard('debtToEquity')}
-                {renderRatioCard('longTermDebtToEquity')}
+              <Box>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center' }}>
+                  <Dashboard sx={{ mr: 1 }} />
+                  Leverage Ratios
+                </Typography>
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, 
+                  gap: 3
+                }}>
+                  {renderRatioCard('debtToAssets')}
+                  {renderRatioCard('debtToEquity')}
+                  {renderRatioCard('longTermDebtToEquity')}
+                </Box>
               </Box>
-            </>
+            </Box>
           ) : (
-            <Alert severity="info">
+            <Alert severity="info" sx={{ backgroundColor: 'rgba(255, 255, 255, 0.9)' }}>
               No financial data available. Please ensure you have approved journal entries and account balances.
             </Alert>
           )}
         </Paper>
-
-        {/* Quick Navigation Menu - Role-Based Access */}
-        <Paper sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-            <Dashboard sx={{ mr: 1, verticalAlign: 'middle' }} />
-            Quick Navigation
-          </Typography>
-          <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-            {/* Journalize Button - All roles */}
-            <Button
-              variant="contained"
-              startIcon={<Create />}
-              onClick={() => navigate('/journalize')}
-              sx={{ textTransform: 'none' }}
-            >
-              Journalize
-            </Button>
-
-            {/* Chart of Accounts - All roles */}
-            <Button
-              variant="contained"
-              startIcon={<AccountTree />}
-              onClick={() => navigate('/chart-of-accounts')}
-              sx={{ textTransform: 'none' }}
-            >
-              Chart of Accounts
-            </Button>
-
-            {/* Event Logs - All roles */}
-            <Button
-              variant="contained"
-              startIcon={<History />}
-              onClick={() => navigate('/event-logs')}
-              sx={{ textTransform: 'none' }}
-            >
-              Event Logs
-            </Button>
-
-            {/* Reports Dropdown - All roles */}
-            <Button
-              variant="contained"
-              startIcon={<Assessment />}
-              endIcon={<ArrowDropDown />}
-              onClick={handleReportsMenuOpen}
-              sx={{ textTransform: 'none' }}
-            >
-              Reports
-            </Button>
-            <Menu
-              anchorEl={reportsMenuAnchor}
-              open={Boolean(reportsMenuAnchor)}
-              onClose={handleReportsMenuClose}
-            >
-              <MenuItem onClick={() => handleReportsNavigation('/trial-balance')}>
-                Trial Balance
-              </MenuItem>
-              <MenuItem onClick={() => handleReportsNavigation('/income-statement')}>
-                Income Statement
-              </MenuItem>
-              <MenuItem onClick={() => handleReportsNavigation('/retained-earnings')}>
-                Retained Earnings
-              </MenuItem>
-              <MenuItem onClick={() => handleReportsNavigation('/balance-sheet')}>
-                Balance Sheet
-              </MenuItem>
-            </Menu>
-
-            {/* Admin Utilities - Administrator only */}
-              {user.role === 'Administrator' && (
-                <>
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  endIcon={<ArrowDropDown />}
-                  onClick={handleAdminMenuOpen}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Admin Utilities
-                </Button>
-                <Menu
-                  anchorEl={adminMenuAnchor}
-                  open={Boolean(adminMenuAnchor)}
-                  onClose={handleAdminMenuClose}
-                >
-                  <MenuItem onClick={() => handleAdminNavigation('/users')}>
-                    <People sx={{ mr: 1 }} />
-                    Users
-                  </MenuItem>
-                  <MenuItem onClick={() => handleAdminNavigation('/registrations')}>
-                    <People sx={{ mr: 1 }} />
-                    Registrations
-                  </MenuItem>
-                  <MenuItem onClick={() => handleAdminNavigation('/expiring-passwords')}>
-                    <Warning sx={{ mr: 1 }} />
-                          Expiring Passwords
-                  </MenuItem>
-                </Menu>
-                </>
-              )}
-          </Stack>
-        </Paper>
-
-        {/* Sidebar */}
-        <Box sx={{ width: { xs: '100%', lg: 300 }, flexShrink: 0, ml: 'auto' }}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                System Status
-              </Typography>
-              <List>
-                <ListItem>
-                  <ListItemIcon>
-                    <CheckCircle color="success" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="System Online" 
-                    secondary="All services operational"
-                  />
-                </ListItem>
-                <Divider />
-                <ListItem>
-                  <ListItemIcon>
-                    <CheckCircle color="success" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Database Connected" 
-                    secondary="Data synchronization active"
-                  />
-                </ListItem>
-                <Divider />
-                <ListItem>
-                  <ListItemIcon>
-                    <Schedule color="info" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Report Period" 
-                    secondary={`${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`}
-                  />
-                </ListItem>
-              </List>
-
-              {/* Pending Journal Entries Summary */}
-              {(user.role === 'Manager' || user.role === 'Administrator') && pendingJournalEntries.length > 0 && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Box>
-                    <Typography variant="h6" gutterBottom>
-                      Pending Actions
-                    </Typography>
-                    <List dense>
-                      <ListItem>
-                        <ListItemIcon>
-                          <Assignment color="warning" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={`${pendingJournalEntries.length} Journal ${pendingJournalEntries.length === 1 ? 'Entry' : 'Entries'}`}
-                          secondary="Awaiting approval"
-                        />
-                      </ListItem>
-                    </List>
-                  </Box>
-                </>
-              )}
-            </Paper>
-          </Box>
       </Container>
     </Box>
   );

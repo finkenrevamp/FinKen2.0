@@ -91,6 +91,24 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
   // Delete state
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  
+  // Close period state
+  const [closePeriodOpen, setClosePeriodOpen] = useState(false);
+  const [closingPeriod, setClosingPeriod] = useState(false);
+  const [periodEndDate, setPeriodEndDate] = useState<string>(() => {
+    // Default to today's date
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [closePeriodResult, setClosePeriodResult] = useState<{
+    message: string;
+    journal_entry_id: number;
+    period_end_date: string;
+    total_revenue: string;
+    total_expenses: string;
+    net_income: string;
+    accounts_closed: number;
+  } | null>(null);
 
   // Fetch journal entries
   const fetchJournalEntries = useCallback(async () => {
@@ -325,6 +343,58 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
     setSelectedEntry(null);
   };
 
+  const handleClosePeriodClick = () => {
+    setClosePeriodOpen(true);
+    setClosePeriodResult(null);
+  };
+
+  const handleClosePeriodCancel = () => {
+    setClosePeriodOpen(false);
+    setPeriodEndDate(() => {
+      const today = new Date();
+      return today.toISOString().split('T')[0];
+    });
+    setClosePeriodResult(null);
+  };
+
+  const handleClosePeriodConfirm = async () => {
+    if (!periodEndDate) return;
+    
+    try {
+      setClosingPeriod(true);
+      setError(null);
+      
+      const result = await journalEntriesService.closePeriod(periodEndDate);
+      
+      // Store the result to display
+      setClosePeriodResult(result);
+      
+      // Refresh entries to show the new closing entry
+      await fetchJournalEntries();
+    } catch (err: any) {
+      console.error('Failed to close period:', err);
+      setError(err.message || 'Failed to close accounting period');
+    } finally {
+      setClosingPeriod(false);
+    }
+  };
+
+  const handleViewClosingEntry = () => {
+    if (closePeriodResult) {
+      setClosePeriodOpen(false);
+      setPeriodEndDate(() => {
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+      });
+      setClosePeriodResult(null);
+      
+      // Navigate to the closing entry
+      navigate('/journalize', {
+        state: { openEntryId: closePeriodResult.journal_entry_id },
+      });
+    }
+  };
+
   const canApproveOrReject = (user.role === 'Manager' || user.role === 'Administrator') 
     && selectedEntry 
     && selectedEntry.created_by_username !== user.username;
@@ -510,18 +580,31 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
             Create and manage journal entries for your accounting records
           </Typography>
         </Box>
-        {user.role !== 'Administrator' && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            size="large"
-            onClick={() => setNewEntryOpen(true)}
-            sx={{ height: 'fit-content' }}
-          >
-            New Entry
-          </Button>
-        )}
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {(user.role === 'Manager' || user.role === 'Administrator') && (
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="large"
+              onClick={handleClosePeriodClick}
+              sx={{ height: 'fit-content' }}
+            >
+              Close Period
+            </Button>
+          )}
+          {user.role !== 'Administrator' && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              size="large"
+              onClick={() => setNewEntryOpen(true)}
+              sx={{ height: 'fit-content' }}
+            >
+              New Entry
+            </Button>
+          )}
+        </Box>
         </Box>
 
         {/* Search and Filter Bar */}
@@ -1056,6 +1139,130 @@ const Journalize: React.FC<JournalizeProps> = ({ user, onLogout }) => {
           existingEntry={selectedEntry}
         />
       )}
+
+      {/* Close Period Dialog */}
+      <Dialog open={closePeriodOpen} onClose={handleClosePeriodCancel} maxWidth="sm" fullWidth>
+        <DialogTitle>Close Accounting Period</DialogTitle>
+        <DialogContent>
+          {!closePeriodResult ? (
+            <>
+              <Typography variant="body1" gutterBottom sx={{ mt: 1 }}>
+                This will create a closing entry that transfers all revenue and expense account balances to Retained Earnings.
+              </Typography>
+              <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Warning:</strong> This action will automatically post the closing entry and update all account balances. 
+                  Make sure all journal entries for the period have been approved before closing.
+                </Typography>
+              </Alert>
+              <TextField
+                fullWidth
+                label="Period End Date"
+                type="date"
+                value={periodEndDate}
+                onChange={(e) => setPeriodEndDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ mt: 2 }}
+              />
+            </>
+          ) : (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="success" sx={{ mb: 3 }}>
+                {closePeriodResult.message}
+              </Alert>
+              <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="h6" gutterBottom>
+                  Closing Entry Summary
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 2 }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Entry ID
+                    </Typography>
+                    <Typography variant="body1">
+                      #{closePeriodResult.journal_entry_id}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Period End Date
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatDate(closePeriodResult.period_end_date)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Revenue
+                    </Typography>
+                    <Typography variant="body1" color="success.main">
+                      {formatCurrency(closePeriodResult.total_revenue)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Expenses
+                    </Typography>
+                    <Typography variant="body1" color="error.main">
+                      {formatCurrency(closePeriodResult.total_expenses)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Net Income
+                    </Typography>
+                    <Typography 
+                      variant="body1" 
+                      fontWeight="bold"
+                      color={parseFloat(closePeriodResult.net_income) >= 0 ? 'success.main' : 'error.main'}
+                    >
+                      {formatCurrency(closePeriodResult.net_income)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Accounts Closed
+                    </Typography>
+                    <Typography variant="body1">
+                      {closePeriodResult.accounts_closed}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {!closePeriodResult ? (
+            <>
+              <Button onClick={handleClosePeriodCancel} disabled={closingPeriod}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleClosePeriodConfirm}
+                variant="contained"
+                color="primary"
+                disabled={closingPeriod || !periodEndDate}
+              >
+                {closingPeriod ? <CircularProgress size={24} /> : 'Close Period'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={handleClosePeriodCancel}>
+                Close
+              </Button>
+              <Button
+                onClick={handleViewClosingEntry}
+                variant="contained"
+                color="primary"
+              >
+                View Closing Entry
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -639,72 +639,50 @@ async def get_trial_balance(
                 logger.warning(f"Account {account['AccountNumber']} has no NormalSide specified")
                 continue
 
-            # Get initial balance and journal entries
-            initial_balance = Decimal(str(account.get("Balance", "0.00")))
-            period_entries = []
-            historical_entries = []
+            # Get journal entries up to end_date (NOT using initial balance - that would double count)
+            all_entries = []
 
-            # Get journal entries for the period
+            # Get all journal entries up to the end date
             entries_response = supabase.table("journalentries") \
                 .select("*, journalentrylines!inner(*)") \
                 .eq("Status", "Approved") \
-                .gte("EntryDate", start_date) \
-                .lt("EntryDate", end_date_inclusive) \
+                .lte("EntryDate", end_date) \
                 .execute()
             
             if entries_response.data:
                 for entry in entries_response.data:
                     for line in entry.get("journalentrylines", []):
                         if line.get("AccountID") == account["AccountID"]:
-                            period_entries.append({
+                            all_entries.append({
                                 "Type": line["Type"],
                                 "Amount": line["Amount"]
                             })
-
-            # Get historical entries (before start_date) if needed
-            creation_date = account.get("DateCreated")
-            if creation_date:
-                try:
-                    parsed_date = datetime.strptime(creation_date.split('.')[0], "%Y-%m-%dT%H:%M:%S")
-                    if parsed_date < start_dt:
-                        historical_response = supabase.table("journalentries") \
-                            .select("*, journalentrylines!inner(*)") \
-                            .eq("Status", "Approved") \
-                            .lt("EntryDate", start_date) \
-                            .execute()
-                        
-                        if historical_response.data:
-                            for entry in historical_response.data:
-                                for line in entry.get("journalentrylines", []):
-                                    if line.get("AccountID") == account["AccountID"]:
-                                        historical_entries.append({
-                                            "Type": line["Type"],
-                                            "Amount": line["Amount"]
-                                        })
-                except (ValueError, AttributeError) as e:
-                    logger.warning(f"Error parsing date for account {account['AccountNumber']}: {str(e)}")
                     
-            # Calculate balances starting with initial balance
-            historical_balance = get_account_balance(initial_balance, historical_entries, normal_side)
-            period_balance = get_account_balance(0, period_entries, normal_side)  # Period entries start from 0
-
-            # Calculate final balance
-            total_balance = historical_balance + period_balance
+            # Calculate balance from journal entries only (starting from 0)
+            # The initial balance in chartofaccounts already includes historical data
+            # so we should calculate from scratch using journal entries
+            total_balance = get_account_balance(0, all_entries, normal_side)
             
-            # Ensures positive balance on both sides per normal side rules
+            # Determine if balance should be on debit or credit side
+            # For debit-normal accounts (Assets, Expenses):
+            #   - Positive balance = debit side
+            #   - Negative balance = credit side (abnormal balance)
+            # For credit-normal accounts (Liabilities, Equity, Revenue):
+            #   - Positive balance = credit side  
+            #   - Negative balance = debit side (abnormal balance)
             debit_balance = Decimal("0.00")
             credit_balance = Decimal("0.00")
 
             if normal_side == "Debit":
-                if total_balance > 0:
+                if total_balance >= 0:
                     debit_balance = total_balance
                 else:
-                    credit_balance = -total_balance
-            else:
-                if total_balance > 0:
+                    credit_balance = abs(total_balance)
+            else:  # Credit normal side
+                if total_balance >= 0:
                     credit_balance = total_balance
                 else:
-                    debit_balance = -total_balance
+                    debit_balance = abs(total_balance)
 
             total_debits += debit_balance
             total_credits += credit_balance

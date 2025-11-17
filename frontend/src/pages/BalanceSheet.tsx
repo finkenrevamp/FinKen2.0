@@ -8,11 +8,6 @@ import {
     Alert,
     TextField,
     Button,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableRow,
     Divider,
     Stack,
     IconButton,
@@ -20,7 +15,8 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions,Autocomplete
+    DialogActions,
+    Autocomplete
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import EmailIcon from '@mui/icons-material/Email';
@@ -203,58 +199,50 @@ const BalanceSheet: React.FC<BalanceSheetProps> = ({ user, onLogout }) => {
 
             <Divider sx={{ my: 3 }} />
 
-            <TableContainer>
-              <Table>
-                <TableBody>
-                  <TableRow>
-                    <TableCell sx={{ border: 'none', pl: 0, width: '50%', verticalAlign: 'top' }}>
-                      <Typography variant="h6" fontWeight="bold">Assets</Typography>
-                      {report.assets.map(asset => (
-                        <Box key={asset.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2 }}>
-                          <Typography variant="body2">{asset.account_name}</Typography>
-                          <Typography variant="body2">{formatCurrency(asset.amount)}</Typography>
-                        </Box>
-                      ))}
-                      <Divider sx={{ mt: 1 }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
-                        <Typography fontWeight="bold">Total Assets</Typography>
-                        <Typography fontWeight="bold">{formatCurrency(report.total_assets)}</Typography>
-                      </Box>
-                    </TableCell>
+            <Box>
+              {/* Assets Section */}
+              <Typography variant="h6" fontWeight="bold" mb={2}>Assets</Typography>
+              {report.assets.map(asset => (
+                <Box key={asset.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1 }}>
+                  <Typography variant="body2">{asset.account_name}</Typography>
+                  <Typography variant="body2">{formatCurrency(asset.amount)}</Typography>
+                </Box>
+              ))}
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
+                <Typography fontWeight="bold">Total Assets</Typography>
+                <Typography fontWeight="bold">{formatCurrency(report.total_assets)}</Typography>
+              </Box>
 
-                    <TableCell sx={{ border: 'none', pl: 4, width: '50%', verticalAlign: 'top' }}>
-                      <Typography variant="h6" fontWeight="bold">Liabilities & Equity</Typography>
-                      {report.liabilities.map(liab => (
-                        <Box key={liab.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2 }}>
-                          <Typography variant="body2">{liab.account_name}</Typography>
-                          <Typography variant="body2">{formatCurrency(liab.amount)}</Typography>
-                        </Box>
-                      ))}
-                      {report.equity.map(eq => (
-                        <Box key={eq.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2 }}>
-                          <Typography variant="body2">{eq.account_name}</Typography>
-                          <Typography variant="body2">{formatCurrency(eq.amount)}</Typography>
-                        </Box>
-                      ))}
-                      <Divider sx={{ mt: 1 }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
-                        <Typography fontWeight="bold">Total Liabilities & Equity</Typography>
-                        <Typography fontWeight="bold">{formatCurrency(report.total_liabilities_equity)}</Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                    {formatCurrency(report.total_assets) !== formatCurrency(report.total_liabilities_equity) && (
-                <TableRow>
-                    <TableCell colSpan={2} sx={{ border: 'none', pt: 2 }}>
-                        <Typography fontWeight="bold" color="error" fontSize={30}>
-                            Assets do not match Liabilities & Equity
-                        </Typography>
-                    </TableCell>
-                </TableRow>
-                )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+              {/* Liabilities & Equity Section */}
+              <Typography variant="h6" fontWeight="bold" mb={2}>Liabilities & Equity</Typography>
+              {report.liabilities.map(liab => (
+                <Box key={liab.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1 }}>
+                  <Typography variant="body2">{liab.account_name}</Typography>
+                  <Typography variant="body2">{formatCurrency(liab.amount)}</Typography>
+                </Box>
+              ))}
+              {report.equity.map(eq => (
+                <Box key={eq.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1 }}>
+                  <Typography variant="body2">{eq.account_name}</Typography>
+                  <Typography variant="body2">{formatCurrency(eq.amount)}</Typography>
+                </Box>
+              ))}
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                <Typography fontWeight="bold">Total Liabilities & Equity</Typography>
+                <Typography fontWeight="bold">{formatCurrency(report.total_liabilities_equity)}</Typography>
+              </Box>
+
+              {/* Error Message if Totals Don't Match */}
+              {formatCurrency(report.total_assets) !== formatCurrency(report.total_liabilities_equity) && (
+                <Box sx={{ pt: 2 }}>
+                  <Typography fontWeight="bold" color="error" fontSize={30}>
+                    Assets do not match Liabilities & Equity
+                  </Typography>
+                </Box>
+              )}
+            </Box>
 
             <Box mt={4} pt={2} borderTop="1px solid" borderColor="divider">
               <Typography variant="caption" color="text.secondary">

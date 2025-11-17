@@ -1016,6 +1016,236 @@ async def delete_journal_entry(
             detail=f"An error occurred while deleting the journal entry: {str(e)}"
         )
 
+@router.post("/close-period")
+async def close_period(
+    period_end_date: str = Form(...),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Close all revenue and expense accounts to Retained Earnings
+    Creates a single closing journal entry that:
+    1. Debits all revenue accounts (to zero them out)
+    2. Credits all expense accounts (to zero them out)
+    3. The net difference goes to Retained Earnings
+    
+    This should only be done at the end of an accounting period.
+    Requires Manager or Administrator role.
+    """
+    try:
+        # Check if user has permission (Manager or Administrator)
+        supabase = get_supabase_client()
+        
+        # Get user role
+        role_result = supabase.from_("profiles").select("roles(RoleName)").eq("id", str(current_user.id)).single().execute()
+        user_role = role_result.data.get("roles", {}).get("RoleName") if role_result.data else None
+        
+        if user_role not in ["Manager", "Administrator"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Managers and Administrators can close accounting periods"
+            )
+        
+        # Get all revenue accounts (Category = 'Revenue')
+        revenue_accounts = supabase.from_("chartofaccounts").select(
+            "AccountID, AccountNumber, AccountName, Balance, Category"
+        ).eq("Category", "Revenue").eq("IsActive", True).execute()
+        
+        # Get all expense accounts (Category = 'Expense')
+        expense_accounts = supabase.from_("chartofaccounts").select(
+            "AccountID, AccountNumber, AccountName, Balance, Category"
+        ).eq("Category", "Expense").eq("IsActive", True).execute()
+        
+        # Get Retained Earnings account
+        retained_earnings = supabase.from_("chartofaccounts").select(
+            "AccountID, AccountNumber, AccountName, Balance"
+        ).eq("AccountName", "Retained Earnings").eq("IsActive", True).single().execute()
+        
+        if not retained_earnings.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Retained Earnings account not found. Please create this account before closing the period."
+            )
+        
+        retained_earnings_id = retained_earnings.data["AccountID"]
+        
+        # Calculate net income
+        total_revenue = Decimal('0.00')
+        total_expenses = Decimal('0.00')
+        
+        for account in revenue_accounts.data:
+            total_revenue += Decimal(str(account.get("Balance", "0.00")))
+        
+        for account in expense_accounts.data:
+            total_expenses += Decimal(str(account.get("Balance", "0.00")))
+        
+        net_income = total_revenue - total_expenses
+        
+        # Check if there's anything to close
+        if total_revenue == 0 and total_expenses == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No revenue or expense balances to close"
+            )
+        
+        # Build journal entry lines
+        lines = []
+        
+        # Debit all revenue accounts (to zero them out)
+        for account in revenue_accounts.data:
+            balance = Decimal(str(account.get("Balance", "0.00")))
+            if balance != 0:
+                lines.append({
+                    "account_id": account["AccountID"],
+                    "type": "Debit",
+                    "amount": str(balance)
+                })
+        
+        # Credit all expense accounts (to zero them out)
+        for account in expense_accounts.data:
+            balance = Decimal(str(account.get("Balance", "0.00")))
+            if balance != 0:
+                lines.append({
+                    "account_id": account["AccountID"],
+                    "type": "Credit",
+                    "amount": str(balance)
+                })
+        
+        # Add Retained Earnings line (net income)
+        if net_income > 0:
+            # Profit: Credit Retained Earnings
+            lines.append({
+                "account_id": retained_earnings_id,
+                "type": "Credit",
+                "amount": str(net_income)
+            })
+        elif net_income < 0:
+            # Loss: Debit Retained Earnings
+            lines.append({
+                "account_id": retained_earnings_id,
+                "type": "Debit",
+                "amount": str(abs(net_income))
+            })
+        
+        # Create the closing journal entry
+        entry_insert = {
+            "EntryDate": period_end_date,
+            "Description": f"Closing Entry - Period ended {period_end_date}",
+            "Status": "Approved",  # Auto-approve closing entries
+            "IsAdjustingEntry": True,
+            "CreatedByUserID": str(current_user.id),
+            "CreationDate": datetime.utcnow().isoformat(),
+            "ApprovedByUserID": str(current_user.id),
+            "ApprovalDate": datetime.utcnow().isoformat()
+        }
+        
+        entry_result = supabase.from_("journalentries").insert(entry_insert).execute()
+        
+        if not entry_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create closing journal entry"
+            )
+        
+        journal_entry_id = entry_result.data[0]['JournalEntryID']
+        
+        # Insert journal entry lines
+        lines_insert = []
+        for line in lines:
+            lines_insert.append({
+                "JournalEntryID": journal_entry_id,
+                "AccountID": line['account_id'],
+                "Type": line['type'],
+                "Amount": str(line['amount'])
+            })
+        
+        supabase.from_("journalentrylines").insert(lines_insert).execute()
+        
+        # Post to account ledger and update account balances
+        for line in lines:
+            ledger_entry = {
+                "AccountID": line["account_id"],
+                "JournalEntryID": journal_entry_id,
+                "TransactionDate": period_end_date,
+                "Description": f"Closing Entry - Period ended {period_end_date}",
+                "Debit": str(line["amount"]) if line["type"] == "Debit" else "0.00",
+                "Credit": str(line["amount"]) if line["type"] == "Credit" else "0.00",
+                "PostTimestamp": datetime.utcnow().isoformat()
+            }
+            supabase.from_("accountledger").insert(ledger_entry).execute()
+            
+            # Update account balance
+            account_id = line["account_id"]
+            amount = Decimal(str(line["amount"]))
+            line_type = line["type"]
+            
+            # Get the account's current balance and normal side
+            account_result = supabase.from_("chartofaccounts").select("Balance, NormalSide").eq("AccountID", account_id).single().execute()
+            
+            if account_result.data:
+                current_balance = Decimal(str(account_result.data.get("Balance", "0.00")))
+                normal_side = account_result.data.get("NormalSide")
+                
+                # Calculate new balance
+                if line_type == "Debit":
+                    if normal_side == "Debit":
+                        new_balance = current_balance + amount
+                    else:
+                        new_balance = current_balance - amount
+                else:  # Credit
+                    if normal_side == "Credit":
+                        new_balance = current_balance + amount
+                    else:
+                        new_balance = current_balance - amount
+                
+                # Update the account balance
+                supabase.from_("chartofaccounts").update({
+                    "Balance": str(new_balance)
+                }).eq("AccountID", account_id).execute()
+                
+                logger.info(f"Updated account {account_id} balance from {current_balance} to {new_balance}")
+        
+        # Log the closing entry event
+        try:
+            log_entry = {
+                "UserID": str(current_user.id),
+                "Timestamp": datetime.utcnow().isoformat(),
+                "ActionType": "CLOSE_PERIOD",
+                "TableName": "journalentries",
+                "RecordID": str(journal_entry_id),
+                "AfterValue": json.dumps({
+                    "journal_entry_id": journal_entry_id,
+                    "period_end_date": period_end_date,
+                    "total_revenue": str(total_revenue),
+                    "total_expenses": str(total_expenses),
+                    "net_income": str(net_income),
+                    "lines_count": len(lines)
+                })
+            }
+            supabase.from_("journal_event_logs").insert(log_entry).execute()
+        except Exception as log_error:
+            logger.warning(f"Failed to log closing entry: {log_error}")
+        
+        # Return the created closing entry
+        return {
+            "message": "Period closed successfully",
+            "journal_entry_id": journal_entry_id,
+            "period_end_date": period_end_date,
+            "total_revenue": str(total_revenue),
+            "total_expenses": str(total_expenses),
+            "net_income": str(net_income),
+            "accounts_closed": len(revenue_accounts.data) + len(expense_accounts.data)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Close period error: {e}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while closing the period: {str(e)}"
+        )
+
 @router.patch("/{journal_entry_id}")
 async def update_journal_entry(
     journal_entry_id: int,

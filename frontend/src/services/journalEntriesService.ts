@@ -278,6 +278,42 @@ class JournalEntriesService {
       throw new Error('Failed to delete journal entry');
     }
   }
+
+  /**
+   * Close accounting period
+   * Creates a closing entry that transfers all revenue and expense balances to Retained Earnings
+   */
+  async closePeriod(periodEndDate: string): Promise<{
+    message: string;
+    journal_entry_id: number;
+    period_end_date: string;
+    total_revenue: string;
+    total_expenses: string;
+    net_income: string;
+    accounts_closed: number;
+  }> {
+    try {
+      const formData = new FormData();
+      formData.append('period_end_date', periodEndDate);
+      
+      const response = await apiClient.post<{
+        message: string;
+        journal_entry_id: number;
+        period_end_date: string;
+        total_revenue: string;
+        total_expenses: string;
+        net_income: string;
+        accounts_closed: number;
+      }>(`${this.basePath}/close-period`, formData);
+      
+      return response.data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(error.message);
+      }
+      throw new Error('Failed to close accounting period');
+    }
+  }
 }
 
 // Export singleton instance

@@ -79,6 +79,16 @@ const BalanceSheet: React.FC<BalanceSheetProps> = ({ user, onLogout }) => {
     }).format(num);
   };
 
+  // Helper to check if account is contra-asset (reduces assets)
+  const isContraAsset = (accountName: string): boolean => {
+    const lowerName = accountName.toLowerCase();
+    return (lowerName.includes('accumulated depreciation') ||
+            lowerName.includes('accumulated deprecation') ||  // Handle typo
+            lowerName.includes('accumulated amortization') ||
+            lowerName.includes('allowance for doubtful') ||
+            lowerName.includes('contra'));
+  };
+
   const exportToPDF = async () => {
     if (!reportRef.current || !report) return;
     try {
@@ -199,50 +209,92 @@ const BalanceSheet: React.FC<BalanceSheetProps> = ({ user, onLogout }) => {
 
             <Divider sx={{ my: 3 }} />
 
-            <Box>
-              {/* Assets Section */}
-              <Typography variant="h6" fontWeight="bold" mb={2}>Assets</Typography>
-              {report.assets.map(asset => (
-                <Box key={asset.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1 }}>
-                  <Typography variant="body2">{asset.account_name}</Typography>
-                  <Typography variant="body2">{formatCurrency(asset.amount)}</Typography>
+            <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
+              {/* LEFT COLUMN - ASSETS */}
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6" fontWeight="bold" mb={2}>Assets</Typography>
+                {/* Regular Assets */}
+                {report.assets
+                  .filter(asset => !isContraAsset(asset.account_name))
+                  .map(asset => (
+                    <Box
+                      key={asset.account_name}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        pl: 2,
+                        mb: 1.5
+                      }}
+                    >
+                      <Typography>{asset.account_name}</Typography>
+                      <Typography>{formatCurrency(asset.amount)}</Typography>
+                    </Box>
+                  ))}
+
+                {/* Contra-Assets (subtractions) */}
+                {report.assets
+                  .filter(asset => isContraAsset(asset.account_name))
+                  .map(asset => {
+                    const amount = parseFloat(asset.amount);
+                    return (
+                      <Box
+                        key={asset.account_name}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          pl: 4,
+                          mb: 1.5
+                        }}
+                      >
+                        <Typography>{asset.account_name}</Typography>
+                        <Typography>({formatCurrency(amount)})</Typography>
+                      </Box>
+                    );
+                  })}
+
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography fontWeight="bold" variant="h6">Total Assets</Typography>
+                  <Typography fontWeight="bold" variant="h6">{formatCurrency(report.total_assets)}</Typography>
                 </Box>
-              ))}
-              <Divider sx={{ my: 2 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
-                <Typography fontWeight="bold">Total Assets</Typography>
-                <Typography fontWeight="bold">{formatCurrency(report.total_assets)}</Typography>
               </Box>
 
-              {/* Liabilities & Equity Section */}
-              <Typography variant="h6" fontWeight="bold" mb={2}>Liabilities & Equity</Typography>
-              {report.liabilities.map(liab => (
-                <Box key={liab.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1 }}>
-                  <Typography variant="body2">{liab.account_name}</Typography>
-                  <Typography variant="body2">{formatCurrency(liab.amount)}</Typography>
-                </Box>
-              ))}
-              {report.equity.map(eq => (
-                <Box key={eq.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1 }}>
-                  <Typography variant="body2">{eq.account_name}</Typography>
-                  <Typography variant="body2">{formatCurrency(eq.amount)}</Typography>
-                </Box>
-              ))}
-              <Divider sx={{ my: 2 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography fontWeight="bold">Total Liabilities & Equity</Typography>
-                <Typography fontWeight="bold">{formatCurrency(report.total_liabilities_equity)}</Typography>
-              </Box>
+              {/* RIGHT COLUMN - LIABILITIES & EQUITY */}
+              <Box sx={{ flex: 1 }}>
+                {/* Liabilities Section */}
+                <Typography variant="h6" fontWeight="bold" mb={2}>Liabilities</Typography>
+                {report.liabilities.map(liab => (
+                  <Box key={liab.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1.5 }}>
+                    <Typography>{liab.account_name}</Typography>
+                    <Typography>{formatCurrency(liab.amount)}</Typography>
+                  </Box>
+                ))}
+                <Divider sx={{ my: 2 }} />
 
-              {/* Error Message if Totals Don't Match */}
-              {formatCurrency(report.total_assets) !== formatCurrency(report.total_liabilities_equity) && (
-                <Box sx={{ pt: 2 }}>
-                  <Typography fontWeight="bold" color="error" fontSize={30}>
-                    Assets do not match Liabilities & Equity
-                  </Typography>
+                {/* Equity Section */}
+                <Typography variant="h6" fontWeight="bold" mb={2} mt={3}>Equity</Typography>
+                {report.equity.map(eq => (
+                  <Box key={eq.account_name} sx={{ display: 'flex', justifyContent: 'space-between', pl: 2, mb: 1.5 }}>
+                    <Typography>{eq.account_name}</Typography>
+                    <Typography>{formatCurrency(eq.amount)}</Typography>
+                  </Box>
+                ))}
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography fontWeight="bold" variant="h6">Total Liabilities & Equity</Typography>
+                  <Typography fontWeight="bold" variant="h6">{formatCurrency(report.total_liabilities_equity)}</Typography>
                 </Box>
-              )}
+              </Box>
             </Box>
+
+            {/* Error Message if Totals Don't Match */}
+            {formatCurrency(report.total_assets) !== formatCurrency(report.total_liabilities_equity) && (
+              <Box sx={{ pt: 2, textAlign: 'center' }}>
+                <Typography fontWeight="bold" color="error" fontSize={24}>
+                  ⚠️ Assets do not match Liabilities & Equity
+                </Typography>
+              </Box>
+            )}
 
             <Box mt={4} pt={2} borderTop="1px solid" borderColor="divider">
               <Typography variant="caption" color="text.secondary">

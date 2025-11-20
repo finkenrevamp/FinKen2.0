@@ -261,47 +261,35 @@ async def get_retained_earnings_report(
         )
 @router.get("/balance-sheet")
 async def get_balance_sheet_report(
-    start_date: str = Query(..., description="Start date for the report (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="End date for the report (YYYY-MM-DD)"),
+    start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     current_user: Profile = Depends(get_current_user_from_token)
 ):
     """
-    Generate Balance Sheet as of a specific date
-
-    Formula:
-    Assets = Liabilities + Equity
+    Proper Balance Sheet generation
+    ASSETS = LIABILITIES + EQUITY
+    Equity includes net income as of the ending date.
     """
     try:
         supabase = get_supabase_client()
-
-        # Validate date format
         try:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-
             if end_dt < start_dt:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=400,
                     detail="End date must be after start date"
                 )
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid date format. Use YYYY-MM-DD"
-            )
+            raise HTTPException(status_code=400, detail="Invalid date format")
 
-        # Get all accounts with their categories and normal sides
         accounts = supabase.from_("chartofaccounts").select(
-            "AccountID, AccountName, Category, Subcategory, NormalSide, Balance"
+            "AccountID, AccountName, Category, Subcategory, NormalSide"
         ).execute()
 
         if not accounts.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No accounts found for balance sheet generation."
-            )
+            raise HTTPException(404, "No accounts found.")
 
-        # Calculate ending balances as of the given date
         assets = {"current": [], "non_current": []}
         liabilities = {"current": [], "long_term": []}
         equity = []
@@ -310,83 +298,112 @@ async def get_balance_sheet_report(
         total_liabilities = Decimal("0.00")
         total_equity = Decimal("0.00")
 
-        for account in accounts.data:
-            acc_id = account["AccountID"]
-            acc_name = account["AccountName"]
-            category = account["Category"]
-            subcategory = (account.get("Subcategory") or "").lower()
-            normal_side = account["NormalSide"]
+        total_revenue = Decimal("0.00")
+        total_expense = Decimal("0.00")
 
-            # Compute account balance as of end_date
-            ledger_entries = supabase.from_("accountledger").select(
-                "Debit, Credit, TransactionDate"
+        for acct in accounts.data:
+            acc_id = acct["AccountID"]
+            name = acct["AccountName"]
+            category = acct["Category"]
+            subcat = (acct.get("Subcategory") or "").lower()
+            normal = acct["NormalSide"]
+            ledger = supabase.from_("accountledger").select(
+                "Debit, Credit"
             ).eq("AccountID", acc_id).lte("TransactionDate", end_date).execute()
 
             debit_total = Decimal("0.00")
             credit_total = Decimal("0.00")
-            for entry in ledger_entries.data:
+
+            for entry in ledger.data:
                 debit_total += Decimal(str(entry.get("Debit", "0.00")))
                 credit_total += Decimal(str(entry.get("Credit", "0.00")))
 
-            balance = Decimal(str(account.get("Balance", "0.00")))
-
-            # Apply normal side to determine ending balance
-            if normal_side == "Debit":
-                ending_balance = balance + debit_total - credit_total
+            if normal == "Debit":
+                ending_balance = debit_total - credit_total
             else:
-                ending_balance = balance + credit_total - debit_total
+                ending_balance = credit_total - debit_total
 
-            # Group into sections
             if category == "Asset":
-                section = "current" if "current" in subcategory or "cash" in acc_name.lower() or "receivable" in acc_name.lower() else "non_current"
-                assets[section].append({
-                    "account_name": acc_name,
+                is_current = (
+                    "current" in subcat
+                    or "cash" in name.lower()
+                    or "receivable" in name.lower()
+                    or "inventory" in name.lower()
+                )
+                bucket = "current" if is_current else "non_current"
+
+                assets[bucket].append({
+                    "account_name": name,
                     "balance": str(ending_balance)
                 })
-                total_assets += ending_balance
+
+                if normal == "Credit":
+                    total_assets -= ending_balance
+                else:
+                    total_assets += ending_balance
 
             elif category == "Liability":
-                section = "current" if "current" in subcategory or "payable" in acc_name.lower() else "long_term"
-                liabilities[section].append({
-                    "account_name": acc_name,
+                is_current = (
+                    "current" in subcat
+                    or ("payable" in name.lower() and "long" not in name.lower())
+                )
+                bucket = "current" if is_current else "long_term"
+
+                liabilities[bucket].append({
+                    "account_name": name,
                     "balance": str(ending_balance)
                 })
+
                 total_liabilities += ending_balance
 
             elif category == "Equity":
                 equity.append({
-                    "account_name": acc_name,
+                    "account_name": name,
                     "balance": str(ending_balance)
                 })
                 total_equity += ending_balance
 
-        # Flatten assets
+            elif category == "Revenue":
+                total_revenue += ending_balance
+
+            elif category == "Expense":
+                total_expense += ending_balance
+
+        net_income = total_revenue - total_expense
+
+        equity.append({
+            "account_name": "Net Income",
+            "balance": str(net_income)
+        })
+        total_equity += net_income
+
+        # Build flattened lists for frontend
         assets_list = assets["current"] + assets["non_current"]
         liabilities_list = liabilities["current"] + liabilities["long_term"]
 
-        # Construct flattened report
-        report = {
+        return {
             "period": {
                 "start_date": start_date,
                 "end_date": end_date,
                 "formatted_end_date": end_dt.strftime("%B %d, %Y")
             },
-            "assets": [{"account_name": a["account_name"], "amount": str(a["balance"])} for a in assets_list],
-            "liabilities": [{"account_name": l["account_name"], "amount": str(l["balance"])} for l in liabilities_list],
-            "equity": [{"account_name": e["account_name"], "amount": str(e["balance"])} for e in equity],
+
+            "assets": [{"account_name": a["account_name"], "amount": a["balance"]}
+                       for a in assets_list],
+
+            "liabilities": [{"account_name": l["account_name"], "amount": l["balance"]}
+                            for l in liabilities_list],
+
+            "equity": [{"account_name": e["account_name"], "amount": e["balance"]}
+                       for e in equity],
+
             "total_assets": str(total_assets),
             "total_liabilities_equity": str(total_liabilities + total_equity)
         }
-        return report
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Get balance sheet report error: {e}")
-        logger.exception("Full traceback:")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while generating the balance sheet: {str(e)}"
+        logger.error(f"Balance sheet generation error: {e}")
+        raise HTTPException(500, f"Balance sheet error: {str(e)}"
         )
 
 @router.get("/income-statement")

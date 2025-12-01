@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel
 import logging
+import json
 
 from models.auth import Profile
 from services.supabase import get_supabase_client, set_current_user
@@ -16,6 +17,20 @@ from services.supabase import get_supabase_client, set_current_user
 router = APIRouter()
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
+
+
+def parse_json_value(value):
+    """Parse a value that might be a JSON string into a dictionary"""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
 
 
 class EventLog(BaseModel):
@@ -146,8 +161,8 @@ async def get_account_event_logs(
                 "action_type": item.get("ActionType"),
                 "table_name": item.get("TableName"),
                 "record_id": item.get("RecordID"),
-                "before_value": item.get("BeforeValue"),
-                "after_value": item.get("AfterValue")
+                "before_value": parse_json_value(item.get("BeforeValue")),
+                "after_value": parse_json_value(item.get("AfterValue"))
             }
             event_logs.append(EventLog(**log_data))
         
@@ -206,8 +221,8 @@ async def get_journal_event_logs(
                 "action_type": item.get("ActionType"),
                 "table_name": item.get("TableName"),
                 "record_id": item.get("RecordID"),
-                "before_value": item.get("BeforeValue"),
-                "after_value": item.get("AfterValue")
+                "before_value": parse_json_value(item.get("BeforeValue")),
+                "after_value": parse_json_value(item.get("AfterValue"))
             }
             event_logs.append(EventLog(**log_data))
         
@@ -266,8 +281,8 @@ async def get_users_event_logs(
                 "action_type": item.get("ActionType"),
                 "table_name": item.get("TableName"),
                 "record_id": item.get("RecordID"),
-                "before_value": item.get("BeforeValue"),
-                "after_value": item.get("AfterValue")
+                "before_value": parse_json_value(item.get("BeforeValue")),
+                "after_value": parse_json_value(item.get("AfterValue"))
             }
             event_logs.append(EventLog(**log_data))
         

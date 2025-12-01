@@ -143,6 +143,17 @@ export class ProfileService {
   }
 
   /**
+   * Send email to admin/manager (any authenticated user)
+   */
+  async sendEmailToManager(userId: string, emailData: SendEmailRequest): Promise<{ message: string; user_id: string; email: string }> {
+    const response = await apiClient.post<{ message: string; user_id: string; email: string }>(
+      `profiles/users/${userId}/send-email-to-manager`,
+      emailData
+    );
+    return response.data;
+  }
+
+  /**
    * Send email with PDF attachment to user (admin only)
    */
   async sendEmailWithAttachmentToUser(userId: string, emailData: SendEmailWithAttachmentRequest): Promise<{ message: string; user_id: string; email: string }> {

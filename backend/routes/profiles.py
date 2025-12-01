@@ -290,6 +290,91 @@ async def get_users_for_email(
         )
 
 
+@router.post("/users/{user_id}/send-email-to-manager")
+async def send_email_to_manager(
+    user_id: str,
+    email_data: SendEmailRequest,
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Send email to an admin or manager (any authenticated user)
+    This allows accountants to send emails to admins/managers
+    """
+    try:
+        supabase = get_supabase_client()
+        service_client = get_supabase_service().get_service_client()
+        
+        # Get recipient profile
+        profile_response = supabase.from_("profiles").select("*").eq("id", user_id).single().execute()
+        
+        if not profile_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        profile = profile_response.data
+        
+        # Verify recipient is an admin or manager
+        role_id = profile.get("RoleID")
+        role_response = supabase.from_("roles").select("RoleName").eq("RoleID", role_id).single().execute()
+        role_name = role_response.data.get("RoleName", "Unknown") if role_response.data else "Unknown"
+        
+        if role_name not in ["Administrator", "Manager"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Can only send emails to Administrators or Managers"
+            )
+        
+        recipient_name = f"{profile.get('FirstName', '')} {profile.get('LastName', '')}"
+        
+        # Get recipient email from auth.users
+        auth_user_response = service_client.auth.admin.get_user_by_id(user_id)
+        if not auth_user_response or not auth_user_response.user or not auth_user_response.user.email:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User email not found"
+            )
+        
+        recipient_email = auth_user_response.user.email
+        
+        # Get sender (current user) email
+        sender_auth_response = service_client.auth.admin.get_user_by_id(str(current_user.id))
+        sender_email = sender_auth_response.user.email if sender_auth_response and sender_auth_response.user and sender_auth_response.user.email else "user@finken.com"
+        sender_name = f"{current_user.first_name} {current_user.last_name}"
+        
+        # Send email
+        result = send_email(
+            sender_email=sender_email or "user@finken.com",
+            sender_name=sender_name,
+            receiver_email=recipient_email,
+            receiver_name=recipient_name,
+            subject=email_data.subject,
+            body=email_data.body
+        )
+        
+        if result.get("success"):
+            return {
+                "message": "Email sent successfully",
+                "user_id": user_id,
+                "email": recipient_email
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send email"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send email to manager error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while sending email: {str(e)}"
+        )
+
+
 @router.get("/users/password-expiry", response_model=List[PasswordExpiryData])
 async def get_password_expiry_data(
     current_user: Profile = Depends(require_admin)

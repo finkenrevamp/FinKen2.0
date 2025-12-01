@@ -59,7 +59,7 @@ const EmailButton: React.FC<EmailButtonProps> = ({
   const fetchEmailRecipients = useCallback(async () => {
     try {
       setEmailDialog((prev) => ({ ...prev, loadingRecipients: true }));
-      const allUsers = await profileService.getAllUsers();
+      const allUsers = await profileService.getUsersForEmail();
       // Filter for only active admins and managers
       const recipients = allUsers.filter(
         (u) => u.is_active && !u.is_suspended && 
@@ -96,7 +96,7 @@ const EmailButton: React.FC<EmailButtonProps> = ({
 
     try {
       setEmailDialog((prev) => ({ ...prev, loading: true }));
-      await profileService.sendEmailToUser(emailDialog.selectedUserId, {
+      await profileService.sendEmailToManager(emailDialog.selectedUserId, {
         subject: emailDialog.subject,
         body: emailDialog.body,
       });

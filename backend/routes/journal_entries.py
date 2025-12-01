@@ -637,7 +637,7 @@ async def create_journal_entry(
                 # Get all managers (profiles with Manager role)
                 managers_result = supabase.from_("profiles").select(
                     "id, Username, FirstName, LastName"
-                ).eq("RoleID", manager_role_id).eq("IsActive", True).execute()
+                ).eq("RoleID", manager_role_id).eq("isActive", True).execute()
                 
                 if managers_result.data:
                     submitter_name = f"{current_user.first_name} {current_user.last_name}"

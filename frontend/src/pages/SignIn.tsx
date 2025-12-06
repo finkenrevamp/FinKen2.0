@@ -11,17 +11,37 @@ import {
   Divider,
   InputAdornment,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Fab,
+  Tooltip,
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   Person,
   Lock,
+  AccountCircle,
+  Login,
 } from '@mui/icons-material';
+import Draggable from 'react-draggable';
 import type { LoginCredentials } from '../types/auth';
 import { useAuth } from '../contexts/AuthContext';
 import AuthHeader from '../components/AuthHeader';
 import AnimatedBackground from '../components/AnimatedBackground';
+
+interface UserCredential {
+  email: string;
+  accountType: string;
+  password: string;
+}
 
 const SignIn: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +52,26 @@ const SignIn: React.FC = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [showCredentialsPopup, setShowCredentialsPopup] = useState(false);
+
+  // Test user credentials from passwords.txt
+  const testUsers: UserCredential[] = [
+    {
+      email: 'finken2.0admin@atomicmail.io',
+      accountType: 'Admin',
+      password: 'Admin123!',
+    },
+    {
+      email: 'finken2.0manager@atomicmail.io',
+      accountType: 'Manager',
+      password: 'Manager123!',
+    },
+    {
+      email: 'finken2.0accountant@atomicmail.io',
+      accountType: 'Accountant',
+      password: 'Accountant123!',
+    },
+  ];
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -75,6 +115,22 @@ const SignIn: React.FC = () => {
     setShowPassword(!showPassword);
   };
 
+  const handleFillCredentials = (user: UserCredential) => {
+    setCredentials({
+      username: user.email,
+      password: user.password,
+    });
+    if (localError) setLocalError(null);
+  };
+
+  const PaperComponent = (props: any) => {
+    return (
+      <Draggable handle="#draggable-dialog-title" cancel={'[class*="MuiDialogContent-root"]'}>
+        <Paper {...props} />
+      </Draggable>
+    );
+  };
+
   // Display either local error or context error
   const displayError = localError || error;
 
@@ -92,6 +148,77 @@ const SignIn: React.FC = () => {
           py: 2, // Reduced padding
           pt: { xs: 18, sm: 20, md: 24 }, // Reduced top padding to prevent scroll
         }}>
+          {/* Floating button to open credentials popup */}
+          <Tooltip title="View Test Credentials" placement="left">
+            <Fab
+              color="primary"
+              aria-label="test credentials"
+              onClick={() => setShowCredentialsPopup(true)}
+              sx={{
+                position: 'fixed',
+                bottom: 32,
+                right: 32,
+                zIndex: 1000,
+              }}
+            >
+              <AccountCircle />
+            </Fab>
+          </Tooltip>
+
+          {/* Draggable Credentials Popup */}
+          <Dialog
+            open={showCredentialsPopup}
+            onClose={() => setShowCredentialsPopup(false)}
+            PaperComponent={PaperComponent}
+            aria-labelledby="draggable-dialog-title"
+            maxWidth="md"
+            sx={{
+              '& .MuiDialog-paper': {
+                minWidth: '600px',
+              },
+            }}
+          >
+            <DialogTitle style={{ cursor: 'move' }} id="draggable-dialog-title">
+              Test User Credentials
+            </DialogTitle>
+            <DialogContent>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Email</strong></TableCell>
+                      <TableCell><strong>Account Type</strong></TableCell>
+                      <TableCell><strong>Password</strong></TableCell>
+                      <TableCell><strong>Action</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {testUsers.map((user, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{user.accountType}</TableCell>
+                        <TableCell>{user.password}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<Login />}
+                            onClick={() => {
+                              handleFillCredentials(user);
+                              setShowCredentialsPopup(false);
+                            }}
+                          >
+                            Use
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </DialogContent>
+          </Dialog>
+
           <Box
             sx={{
               width: '100%',

@@ -18,12 +18,18 @@ if __name__ == "__main__":
         import fastapi
         import supabase
         
+        # Get port from environment variable (required for Koyeb/cloud deployment)
+        port = int(os.environ.get("PORT", 8000))
+        # Disable reload in production
+        is_dev = os.environ.get("DEBUG", "True").lower() == "true"
+        
         print("=" * 60)
         print("Starting FinKen 2.0 API Server...")
         print("=" * 60)
-        print(f"API Documentation: http://localhost:8000/api/docs")
-        print(f"API Root:          http://localhost:8000")
-        print(f"Health Check:      http://localhost:8000/api/health")
+        print(f"API Documentation: http://localhost:{port}/api/docs")
+        print(f"API Root:          http://localhost:{port}")
+        print(f"Health Check:      http://localhost:{port}/api/health")
+        print(f"Environment:       {'Development' if is_dev else 'Production'}")
         print("=" * 60)
         print("\nPress CTRL+C to stop the server\n")
         
@@ -31,8 +37,8 @@ if __name__ == "__main__":
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
-            port=8000,
-            reload=True,
+            port=port,
+            reload=is_dev,
             log_level="info",
             access_log=True
         )

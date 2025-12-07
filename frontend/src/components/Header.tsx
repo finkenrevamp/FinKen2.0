@@ -11,11 +11,14 @@ import {
   Menu,
   MenuItem,
   Chip,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   AccountCircle,
   ExitToApp,
-  Settings,
+  PhotoCamera,
   ArrowDropDown,
   People,
   PersonAdd,
@@ -26,6 +29,8 @@ import {
   Assessment,
 } from '@mui/icons-material';
 import type { User } from '../types/auth';
+import { useAuth } from '../contexts/AuthContext';
+import { profileService } from '../services/profileService';
 import finkenLogo from '../assets/finken2.0logoTransparent.png';
 
 interface HeaderProps {
@@ -35,9 +40,25 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const navigate = useNavigate();
+  const { user: contextUser, updateProfileImage } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [adminMenuAnchor, setAdminMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [reportsMenuAnchor, setReportsMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [snackbar, setSnackbar] = React.useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Use profile image from context (updates in real-time) or fall back to prop
+  const currentProfileImage = contextUser?.profileImage || user.profileImage;
+  
+  // Debug logging
+  console.log('Header render - contextUser?.profileImage:', contextUser?.profileImage);
+  console.log('Header render - user.profileImage:', user.profileImage);
+  console.log('Header render - currentProfileImage:', currentProfileImage);
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -71,6 +92,70 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const handleReportsNavigation = (path: string) => {
     handleReportsMenuClose();
     navigate(path);
+  };
+
+  const handleUploadClick = () => {
+    handleProfileMenuClose();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setSnackbar({
+        open: true,
+        message: 'Please select a valid image file (JPEG, PNG, GIF, or WebP)',
+        severity: 'error',
+      });
+      return;
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setSnackbar({
+        open: true,
+        message: 'Image size must be less than 5MB',
+        severity: 'error',
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const result = await profileService.uploadProfilePicture(file);
+      console.log('Upload result:', result);
+      console.log('Profile picture URL:', result.profile_picture_url);
+      setSnackbar({
+        open: true,
+        message: 'Profile picture uploaded successfully!',
+        severity: 'success',
+      });
+      // Update the user profile image in auth context
+      updateProfileImage(result.profile_picture_url);
+      console.log('Updated profile image in context');
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      setSnackbar({
+        open: true,
+        message: error instanceof Error ? error.message : 'Failed to upload profile picture',
+        severity: 'error',
+      });
+    } finally {
+      setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const handleLogout = () => {
@@ -435,9 +520,9 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
               transition: 'all 0.2s ease-in-out',
             }}
           >
-            {user.profileImage ? (
+            {currentProfileImage ? (
               <Avatar
-                src={user.profileImage}
+                src={currentProfileImage}
                 alt={`${user.firstName} ${user.lastName}`}
                 sx={{ width: 32, height: 32 }}
               />
@@ -472,15 +557,20 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
             }}
           >
             <MenuItem 
-              onClick={handleProfileMenuClose}
+              onClick={handleUploadClick}
+              disabled={uploading}
               sx={{
                 '&:hover': {
                   backgroundColor: 'rgba(25, 118, 210, 0.1)',
                 },
               }}
             >
-              <Settings sx={{ mr: 1 }} />
-              Profile Settings
+              {uploading ? (
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+              ) : (
+                <PhotoCamera sx={{ mr: 1 }} />
+              )}
+              {uploading ? 'Uploading...' : 'Upload Profile Picture'}
             </MenuItem>
             <MenuItem 
               onClick={handleLogout}
@@ -494,8 +584,29 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
               Logout
             </MenuItem>
           </Menu>
+
+          {/* Hidden file input for profile picture upload */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            style={{ display: 'none' }}
+          />
         </Box>
       </Toolbar>
+
+      {/* Snackbar for upload feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </AppBar>
   );
 };

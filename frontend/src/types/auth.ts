@@ -81,4 +81,5 @@ export interface AuthContextType extends AuthState {
   createRegistrationRequest: (request: SignUpRequest) => Promise<string>;
   initiateForgotPassword: (request: ForgotPasswordRequest) => Promise<SecurityQuestionResponse>;
   verifySecurityAnswer: (request: VerifySecurityAnswerRequest) => Promise<PasswordResetTokenResponse>;
+  updateProfileImage: (profileImageUrl: string) => void;
 }

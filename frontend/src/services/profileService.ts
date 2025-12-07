@@ -224,6 +224,22 @@ export class ProfileService {
     );
     return response.data;
   }
+
+  /**
+   * Upload profile picture for the current user
+   * @param file - The image file to upload
+   * @returns The new profile picture URL
+   */
+  async uploadProfilePicture(file: File): Promise<{ message: string; profile_picture_url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await apiClient.post<{ message: string; profile_picture_url: string }>(
+      'profiles/me/profile-picture',
+      formData
+    );
+    return response.data;
+  }
 }
 
 // Export singleton instance

@@ -173,6 +173,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateProfileImage = (profileImageUrl: string) => {
+    setAuthState(prev => ({
+      ...prev,
+      user: prev.user ? {
+        ...prev.user,
+        profileImage: profileImageUrl,
+      } : null,
+    }));
+  };
+
   const value: AuthContextType = {
     ...authState,
     login,
@@ -182,6 +192,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     createRegistrationRequest,
     initiateForgotPassword,
     verifySecurityAnswer,
+    updateProfileImage,
   };
 
   return (

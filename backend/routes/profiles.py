@@ -2,17 +2,29 @@
 Profiles routes - User management functionality
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status, Query
+from fastapi import APIRouter, HTTPException, Depends, status, Query, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 from uuid import UUID
 from pydantic import BaseModel, EmailStr
 import logging
+import uuid as uuid_lib
+import os
 
 from models.auth import Profile, ProfileUpdate
 from services.supabase import get_supabase_service, get_supabase_client, set_current_user
 from services.emailUserFunction import send_email, send_password_expiry_notification
+
+# Allowed image types for profile pictures
+ALLOWED_IMAGE_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp'
+}
+
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 
 router = APIRouter()
 security = HTTPBearer()
@@ -1042,4 +1054,130 @@ async def deactivate_user(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while deactivating user: {str(e)}"
+        )
+
+
+@router.post("/me/profile-picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    current_user: Profile = Depends(get_current_user_from_token)
+):
+    """
+    Upload a profile picture for the current user.
+    The image is stored in the profile_images bucket in Supabase Storage.
+    """
+    try:
+        supabase = get_supabase_client()
+        # Use service client for storage operations to bypass RLS
+        service_client = get_supabase_service().get_service_client()
+        
+        # Validate file type
+        if file.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File type {file.content_type} is not allowed. Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}"
+            )
+        
+        # Validate file extension
+        file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ''
+        if file_ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File extension {file_ext} is not allowed. Allowed extensions: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
+            )
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Limit file size to 5MB
+        max_size = 5 * 1024 * 1024  # 5MB
+        if len(file_content) > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File size exceeds maximum allowed size of 5MB"
+            )
+        
+        # Generate unique filename using user ID
+        unique_filename = f"{current_user.id}/{uuid_lib.uuid4()}{file_ext}"
+        bucket_name = "profile_images"
+        
+        # Delete existing profile picture if it exists
+        existing_profile = supabase.from_("profiles").select("ProfilePictureURL").eq("id", str(current_user.id)).single().execute()
+        if existing_profile.data and existing_profile.data.get("ProfilePictureURL"):
+            old_url = existing_profile.data.get("ProfilePictureURL")
+            # Extract file path from URL if it's a full URL
+            try:
+                # The URL might be a signed URL or contain the bucket path
+                if bucket_name in old_url:
+                    # Extract the path after the bucket name
+                    old_path = old_url.split(f"{bucket_name}/")[-1].split("?")[0]
+                    service_client.storage.from_(bucket_name).remove([old_path])
+                    logger.info(f"Deleted old profile picture: {old_path}")
+            except Exception as delete_error:
+                logger.warning(f"Could not delete old profile picture: {delete_error}")
+        
+        # Upload to Supabase storage using service client
+        try:
+            upload_result = service_client.storage.from_(bucket_name).upload(
+                unique_filename,
+                file_content,
+                file_options={"content-type": file.content_type or "image/jpeg"}
+            )
+            logger.info(f"Upload result for profile picture: {upload_result}")
+        except Exception as upload_error:
+            logger.error(f"Storage upload error: {upload_error}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to upload profile picture: {str(upload_error)}"
+            )
+        
+        # Generate URL for the profile picture
+        # First try public URL, then fall back to signed URL
+        try:
+            public_url = service_client.storage.from_(bucket_name).get_public_url(unique_filename)
+            logger.info(f"Generated public URL: {public_url}")
+        except Exception as url_error:
+            logger.warning(f"Could not get public URL: {url_error}")
+            # Try signed URL as fallback (valid for 1 year)
+            try:
+                signed_url_result = service_client.storage.from_(bucket_name).create_signed_url(
+                    unique_filename,
+                    expires_in=31536000  # 1 year in seconds
+                )
+                if isinstance(signed_url_result, dict) and 'signedURL' in signed_url_result:
+                    public_url = signed_url_result['signedURL']
+                elif isinstance(signed_url_result, str):
+                    public_url = signed_url_result
+                else:
+                    public_url = f"{bucket_name}/{unique_filename}"
+                logger.info(f"Generated signed URL: {public_url}")
+            except Exception as signed_error:
+                logger.warning(f"Could not get signed URL: {signed_error}")
+                public_url = f"{bucket_name}/{unique_filename}"
+        
+        # Update the user's profile with the new picture URL
+        update_result = supabase.from_("profiles").update({
+            "ProfilePictureURL": public_url
+        }).eq("id", str(current_user.id)).execute()
+        
+        if not update_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update profile with new picture URL"
+            )
+        
+        logger.info(f"Profile picture uploaded successfully for user {current_user.id}")
+        
+        return {
+            "message": "Profile picture uploaded successfully",
+            "profile_picture_url": public_url
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload profile picture error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while uploading profile picture: {str(e)}"
         )

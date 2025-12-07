@@ -46,7 +46,8 @@ export function calculateFinancialRatios(
   }
 ): FinancialRatios {
   const revenue = parseFloat(incomeStatement.revenue.total) || 0;
-  const expenses = parseFloat(incomeStatement.expenses.total) || 0;
+  // Note: We use net_income directly from the income statement as it's already calculated
+  // from revenue - expenses by the backend
   const netIncome = parseFloat(incomeStatement.net_income) || 0;
   const totalAssets = parseFloat(balanceSheet.total_assets) || 0;
   
@@ -62,40 +63,95 @@ export function calculateFinancialRatios(
   );
   
   // Calculate current assets and current liabilities
-  // Identify current assets (typically cash, receivables, inventory)
+  // Identify current assets (typically cash, receivables, inventory, prepaid expenses)
   const currentAssets = balanceSheet.assets
     .filter(asset => {
       const name = asset.account_name.toLowerCase();
-      return (
+      // Exclude explicitly non-current assets
+      const isNonCurrent = (
+        name.includes('property') ||
+        name.includes('plant') ||
+        name.includes('equipment') ||
+        name.includes('building') ||
+        name.includes('land') ||
+        name.includes('intangible') ||
+        name.includes('goodwill') ||
+        name.includes('accumulated depreciation') ||
+        name.includes('long-term') ||
+        name.includes('long term')
+      );
+      // Current asset indicators
+      const isCurrent = (
         name.includes('cash') ||
         name.includes('receivable') ||
         name.includes('inventory') ||
-        name.includes('current')
+        name.includes('current') ||
+        name.includes('prepaid') ||
+        name.includes('supplies') ||
+        name.includes('marketable securities') ||
+        name.includes('short-term')
       );
+      
+      return !isNonCurrent && (isCurrent || 
+        // If not explicitly non-current and not matching known fixed asset types, assume current
+        (!name.includes('depreciation') && !name.includes('amortization')));
     })
     .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   
   const currentLiabilities = balanceSheet.liabilities
     .filter(liability => {
       const name = liability.account_name.toLowerCase();
-      return (
+      // Exclude explicitly long-term liabilities
+      const isLongTerm = (
+        name.includes('long-term') ||
+        name.includes('long term') ||
+        name.includes('bonds') ||
+        name.includes('mortgage')
+      );
+      // Current liabilities: payables, current items, short-term items
+      // Also include unearned revenue (typically current) and accrued liabilities
+      const isCurrent = (
         name.includes('payable') ||
         name.includes('current') ||
-        name.includes('short-term')
+        name.includes('short-term') ||
+        name.includes('short term') ||
+        name.includes('accrued') ||
+        name.includes('unearned')
       );
+      // Loans and notes without long-term indicator are considered current by default
+      const isShortTermLoan = (
+        (name.includes('loan') || name.includes('note')) &&
+        !isLongTerm
+      );
+      
+      return !isLongTerm && (isCurrent || isShortTermLoan || 
+        // If not explicitly long-term and not matching any category, assume current
+        (!name.includes('loan') && !name.includes('note') && !name.includes('bonds') && !name.includes('mortgage')));
     })
     .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   
   // Calculate long-term liabilities
+  // Long-term liabilities are those explicitly marked as long-term, bonds, mortgages, 
+  // or loans/notes that are NOT short-term
   const longTermLiabilities = balanceSheet.liabilities
     .filter(liability => {
       const name = liability.account_name.toLowerCase();
-      return (
+      // Explicitly long-term indicators
+      const isExplicitlyLongTerm = (
         name.includes('long-term') ||
-        name.includes('loan') ||
-        name.includes('note') ||
-        (!name.includes('payable') && !name.includes('current') && !name.includes('short-term'))
+        name.includes('long term') ||
+        name.includes('bonds') ||
+        name.includes('mortgage')
       );
+      // Loans and notes are long-term unless marked as short-term or current
+      const isLoanOrNote = (name.includes('loan') || name.includes('note'));
+      const isShortTerm = (
+        name.includes('current') ||
+        name.includes('short-term') ||
+        name.includes('short term')
+      );
+      
+      return isExplicitlyLongTerm || (isLoanOrNote && !isShortTerm);
     })
     .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   
@@ -105,7 +161,11 @@ export function calculateFinancialRatios(
   const returnOnEquity = totalEquity !== 0 ? (netIncome / totalEquity) * 100 : null;
   
   // Liquidity Ratios
-  const currentRatio = currentLiabilities !== 0 ? currentAssets / currentLiabilities : null;
+  // If no current liabilities, current ratio is null (cannot calculate)
+  // If both are 0, ratio is null
+  const currentRatio = currentLiabilities !== 0 
+    ? currentAssets / currentLiabilities 
+    : (currentAssets > 0 ? null : null); // No current liabilities = N/A
   
   // Leverage Ratios
   const debtToAssets = totalAssets !== 0 ? (totalLiabilities / totalAssets) * 100 : null;

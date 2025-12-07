@@ -443,6 +443,11 @@ const TrialBalance: React.FC<TrialBalanceProps> = ({ user, onLogout }) => {
                     color={getBalanceStatusColor(report.is_balanced)}
                     variant="filled"
                     size="medium"
+                    sx={{
+                      '& .MuiChip-label': {
+                        color: 'white',
+                      }
+                    }}
                   />
                 </Box>
               )}

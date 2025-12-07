@@ -390,7 +390,7 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
                   <TableRow>
                     <TableCell sx={{ border: 'none', pl: 0 }}>
                       <Typography variant="body1">
-                        Retained Earnings, Beginning Balance
+                        R/E, beg.
                       </Typography>
                     </TableCell>
                     <TableCell align="right" sx={{ border: 'none', pr: 0 }}>
@@ -400,112 +400,81 @@ const RetainedEarnings: React.FC<RetainedEarningsProps> = ({ user, onLogout }) =
                     </TableCell>
                   </TableRow>
 
-                  {/* Net Income Section */}
+                  {/* Add: Net Income */}
                   <TableRow>
-                    <TableCell sx={{ border: 'none', pl: 0, pt: 3 }}>
-                      <Typography variant="body1" fontWeight="bold">
-                        Add: Net Income
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ border: 'none', pr: 0, pt: 3 }}></TableCell>
-                  </TableRow>
-
-                  {/* Revenue Details */}
-                  <TableRow>
-                    <TableCell sx={{ border: 'none', pl: 4 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Total Revenue
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right" sx={{ border: 'none', pr: 0 }}>
-                      <Typography variant="body2">
-                        {formatCurrency(report.net_income.revenue.total)}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Expense Details */}
-                  <TableRow>
-                    <TableCell sx={{ border: 'none', pl: 4 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Less: Total Expenses
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right" sx={{ border: 'none', pr: 0 }}>
-                      <Typography variant="body2">
-                        ({formatCurrency(report.net_income.expenses.total)})
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Net Income Total */}
-                  <TableRow>
-                    <TableCell sx={{ border: 'none', pl: 4, pb: 3 }}>
-                      <Typography variant="body1" fontWeight="medium">
-                        Net Income
+                    <TableCell sx={{ border: 'none', pl: 0 }}>
+                      <Typography variant="body1">
+                        Add: Net inc.
                       </Typography>
                     </TableCell>
                     <TableCell 
                       align="right" 
                       sx={{ 
                         border: 'none', 
-                        pr: 0, 
-                        pb: 3,
+                        pr: 0,
                         borderBottom: '1px solid',
-                        borderColor: 'divider'
+                        borderColor: 'text.primary'
                       }}
                     >
-                      <Typography variant="body1" fontWeight="medium">
+                      <Typography variant="body1">
                         {formatCurrency(report.net_income.total)}
                       </Typography>
                     </TableCell>
                   </TableRow>
 
-                  {/* Dividends (if any) */}
-                  {parseFloat(report.dividends.total) > 0 && (
-                    <>
-                      <TableRow>
-                        <TableCell sx={{ border: 'none', pl: 0, pt: 2 }}>
-                          <Typography variant="body1" fontWeight="bold">
-                            Less: Dividends
-                          </Typography>
-                        </TableCell>
-                        <TableCell 
-                          align="right" 
-                          sx={{ 
-                            border: 'none', 
-                            pr: 0, 
-                            pt: 2,
-                            borderBottom: '1px solid',
-                            borderColor: 'divider'
-                          }}
-                        >
-                          <Typography variant="body1">
-                            ({formatCurrency(report.dividends.total)})
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    </>
-                  )}
-
-                  {/* Ending Retained Earnings */}
+                  {/* Total */}
                   <TableRow>
-                    <TableCell sx={{ border: 'none', pl: 0, pt: 2 }}>
-                      <Typography variant="h6" fontWeight="bold">
-                        Retained Earnings, Ending Balance
+                    <TableCell sx={{ border: 'none', pl: 0 }}>
+                      <Typography variant="body1">
+                        Total
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={{ border: 'none', pr: 0 }}>
+                      <Typography variant="body1">
+                        {formatCurrency(parseFloat(report.beginning_retained_earnings) + parseFloat(report.net_income.total))}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Less: Dividends */}
+                  <TableRow>
+                    <TableCell sx={{ border: 'none', pl: 0 }}>
+                      <Typography variant="body1">
+                        Less: Dividends
                       </Typography>
                     </TableCell>
                     <TableCell 
                       align="right" 
                       sx={{ 
                         border: 'none', 
-                        pr: 0, 
-                        pt: 2,
-                        borderBottom: '3px double',
-                        borderColor: 'primary.main'
+                        pr: 0,
+                        borderBottom: '1px solid',
+                        borderColor: 'text.primary'
                       }}
                     >
-                      <Typography variant="h6" fontWeight="bold" color="primary">
+                      <Typography variant="body1">
+                        {formatCurrency(report.dividends.total)}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Ending Retained Earnings */}
+                  <TableRow>
+                    <TableCell sx={{ border: 'none', pl: 0 }}>
+                      <Typography variant="body1" fontWeight="bold">
+                        R/E, end.
+                      </Typography>
+                    </TableCell>
+                    <TableCell 
+                      align="right" 
+                      sx={{ 
+                        border: 'none', 
+                        pr: 0,
+                        borderBottom: '3px double',
+                        borderColor: 'text.primary'
+                      }}
+                    >
+                      <Typography variant="body1" fontWeight="bold">
                         {formatCurrency(report.ending_retained_earnings)}
                       </Typography>
                     </TableCell>

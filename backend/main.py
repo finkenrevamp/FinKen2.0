@@ -15,6 +15,10 @@ from routes import auth, accounts, journal_entries, profiles, password_managemen
 # Load environment variables
 load_dotenv()
 
+# Get CORS origins from environment variable
+cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5174")
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
+
 # Create FastAPI application
 app = FastAPI(
     title="FinKen 2.0 API",
@@ -27,7 +31,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],  # React/Vite dev servers
+    allow_origins=cors_origins,  # Configured via CORS_ORIGINS environment variable
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

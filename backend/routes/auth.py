@@ -8,6 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 from uuid import UUID
 import logging
+import os
 from datetime import datetime
 import re
 
@@ -426,8 +427,8 @@ async def approve_registration_request(
         from services.emailUserFunction import send_signup_invitation_email
         from services.supabase import get_supabase_service
         
-        # Generate signup URL
-        frontend_url = "http://localhost:5173"  # TODO: Make this configurable
+        # Generate signup URL - use FRONTEND_URL environment variable for hosted deployments
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         signup_url = f"{frontend_url}/finish-signup?token={invitation_token}"
         
         # Get admin's email from Supabase auth using service client
@@ -695,8 +696,8 @@ async def verify_security_answer_and_send_email(request: VerifySecurityAnswerReq
             # Table might not exist - we'll create it via migration or use alternative storage
             # For now, store in memory or skip (token will still be valid)
         
-        # Generate reset URL
-        frontend_url = "http://localhost:5173"  # TODO: Make this configurable
+        # Generate reset URL - use FRONTEND_URL environment variable for hosted deployments
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         reset_url = f"{frontend_url}/reset-password?token={reset_token}"
         
         # Send password reset email

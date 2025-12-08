@@ -6,9 +6,7 @@ import type {
   AuthContextType, 
   LoginCredentials, 
   SignUpRequest, 
-  ForgotPasswordRequest,
-  SecurityQuestionResponse,
-  PasswordResetTokenResponse
+  ForgotPasswordRequest
 } from '../types/auth';
 import { authService, getStoredToken } from '../services';
 

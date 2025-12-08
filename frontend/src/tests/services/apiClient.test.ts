@@ -2,7 +2,7 @@
  * Unit tests for API Client
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // Test constants and utilities
 describe('API Client Utilities', () => {
@@ -61,7 +61,7 @@ describe('API Client Utilities', () => {
     });
 
     it('should not include authorization header when no token', () => {
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
 

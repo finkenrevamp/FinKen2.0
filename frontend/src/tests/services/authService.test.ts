@@ -26,6 +26,8 @@ describe('AuthService', () => {
   describe('signIn', () => {
     it('should successfully sign in a user', async () => {
       const mockResponse = {
+        status: 200,
+        statusText: 'OK',
         data: {
           access_token: 'mock-token',
           token_type: 'bearer',
@@ -76,6 +78,8 @@ describe('AuthService', () => {
   describe('createRegistrationRequest', () => {
     it('should successfully create a registration request', async () => {
       const mockResponse = {
+        status: 200,
+        statusText: 'OK',
         data: {
           message: 'Registration request submitted successfully',
           request_id: 1,
@@ -124,6 +128,8 @@ describe('AuthService', () => {
   describe('signOut', () => {
     it('should successfully sign out', async () => {
       const mockResponse = {
+        status: 200,
+        statusText: 'OK',
         data: { message: 'Signed out successfully' },
       };
 
@@ -147,6 +153,8 @@ describe('AuthService', () => {
   describe('healthCheck', () => {
     it('should return health status', async () => {
       const mockResponse = {
+        status: 200,
+        statusText: 'OK',
         data: {
           status: 'healthy',
           service: 'authentication',
@@ -175,6 +183,8 @@ describe('AuthService', () => {
   describe('initiateForgotPassword', () => {
     it('should return security question', async () => {
       const mockResponse = {
+        status: 200,
+        statusText: 'OK',
         data: {
           question_id: 1,
           question_text: 'What is your favorite color?',
@@ -197,6 +207,8 @@ describe('AuthService', () => {
   describe('resetPassword', () => {
     it('should successfully reset password', async () => {
       const mockResponse = {
+        status: 200,
+        statusText: 'OK',
         data: {
           message: 'Password reset successfully',
         },

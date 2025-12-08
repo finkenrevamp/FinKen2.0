@@ -9,9 +9,6 @@ import {
   Typography,
   Alert,
   InputAdornment,
-  Stepper,
-  Step,
-  StepLabel,
 } from '@mui/material';
 import {
   ArrowBack,

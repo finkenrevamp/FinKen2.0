@@ -19,6 +19,9 @@ load_dotenv()
 cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5174")
 cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
 
+# Debug: Print CORS origins at startup
+print(f"CORS Origins configured: {cors_origins}")
+
 # Create FastAPI application
 app = FastAPI(
     title="FinKen 2.0 API",
@@ -33,8 +36,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Configured via CORS_ORIGINS environment variable
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
